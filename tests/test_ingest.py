@@ -12,7 +12,7 @@ import pypdf
 import pytest
 
 from studysynth.config import Settings
-from studysynth.ingest import TextbookIngestor, chapter_ranges, estimate_tokens
+from studysynth.pipeline.ingest import TextbookIngestor, chapter_ranges, estimate_tokens
 
 from .samples import write_pdf
 

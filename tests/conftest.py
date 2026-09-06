@@ -7,8 +7,8 @@ import pytest
 from pydantic import BaseModel
 
 from studysynth.config import Settings
-from studysynth.embeddings import MockEmbeddings
-from studysynth.llm import LlmClient
+from studysynth.clients.embeddings import MockEmbeddings
+from studysynth.clients.llm import LlmClient
 from studysynth.models import Candidate, Concept, DraftedConcept, Gap, GapKind, Source
 
 Model = TypeVar("Model", bound=BaseModel)

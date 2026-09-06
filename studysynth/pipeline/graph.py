@@ -15,11 +15,11 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
-from .config import Settings
-from .embeddings import EmbeddingBackend
+from ..config import Settings
+from ..clients.embeddings import EmbeddingBackend
 from .ingest import NoteIngestor, SlideIngestor
-from .llm import LlmClient, PromptLibrary
-from .models import (
+from ..clients.llm import LlmClient, PromptLibrary
+from ..models import (
     Concept,
     DraftedConcept,
     Gap,
@@ -28,7 +28,7 @@ from .models import (
     Source,
 )
 from .retrieval import TextbookGate
-from .store import Catalogue, Places
+from ..store import Catalogue, Places
 
 INGEST_SLIDES = "ingest_slides"
 INGEST_NOTES = "ingest_notes"

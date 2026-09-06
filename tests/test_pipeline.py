@@ -10,13 +10,13 @@ from pathlib import Path
 
 import pytest
 
-from studysynth import embeddings as embedding_backends
-from studysynth import llm as llm_backends
+from studysynth.clients import embeddings as embedding_backends
+from studysynth.clients import llm as llm_backends
 from studysynth.config import Settings
-from studysynth.graph import EXTRACT_CONCEPTS, Nodes, Runner
-from studysynth.ingest import TextbookIngestor
+from studysynth.pipeline.graph import EXTRACT_CONCEPTS, Nodes, Runner
+from studysynth.pipeline.ingest import TextbookIngestor
 from studysynth.models import ChapterRange, Reason
-from studysynth.retrieval import TextbookGate
+from studysynth.pipeline.retrieval import TextbookGate
 from studysynth.services import ServiceError, build
 from studysynth.store import Catalogue, Places, VectorStore
 

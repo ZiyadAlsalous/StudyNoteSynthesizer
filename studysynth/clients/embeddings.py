@@ -16,7 +16,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from .config import Settings
+from ..config import Settings
 
 Vectors = NDArray[np.float32]
 

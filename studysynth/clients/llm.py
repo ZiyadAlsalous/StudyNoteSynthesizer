@@ -16,7 +16,7 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from .config import Settings
+from ..config import Settings
 
 Model = TypeVar("Model", bound=BaseModel)
 

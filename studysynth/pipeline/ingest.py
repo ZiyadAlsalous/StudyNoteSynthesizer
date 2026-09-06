@@ -12,10 +12,10 @@ import re
 from collections.abc import Sequence
 from pathlib import Path
 
-from .config import Settings
-from .llm import LlmClient, PromptLibrary
-from .models import ChapterRange, Chunk, ChunkType, NotePage, Parent, SlidePage
-from .store import Places
+from ..config import Settings
+from ..clients.llm import LlmClient, PromptLibrary
+from ..models import ChapterRange, Chunk, ChunkType, NotePage, Parent, SlidePage
+from ..store import Places
 
 
 class IngestError(RuntimeError):

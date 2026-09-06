@@ -13,11 +13,11 @@ from collections.abc import Sequence
 import numpy as np
 from pydantic import BaseModel, Field
 
-from .config import Settings
-from .embeddings import EmbeddingBackend
+from ..config import Settings
+from ..clients.embeddings import EmbeddingBackend
 from .ingest import estimate_tokens
-from .llm import LlmClient, PromptLibrary
-from .models import (
+from ..clients.llm import LlmClient, PromptLibrary
+from ..models import (
     Admitted,
     Candidate,
     Concept,
@@ -27,7 +27,7 @@ from .models import (
     Rejection,
     RetrievalOutcome,
 )
-from .store import Catalogue, VectorStore
+from ..store import Catalogue, VectorStore
 
 
 class RetrievalError(RuntimeError):

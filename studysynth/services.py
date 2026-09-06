@@ -14,16 +14,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import embeddings as embedding_backends
-from . import llm as llm_backends
+from .clients import embeddings as embedding_backends
+from .clients import llm as llm_backends
 from .config import Settings
-from .embeddings import EmbeddingBackend
-from .graph import EXTRACT_CONCEPTS, Nodes, Runner
-from .ingest import OutlineMissing, TextbookIngestor, chapter_ranges
-from .llm import LlmClient
+from .clients.embeddings import EmbeddingBackend
+from .pipeline.graph import EXTRACT_CONCEPTS, Nodes, Runner
+from .pipeline.ingest import OutlineMissing, TextbookIngestor, chapter_ranges
+from .clients.llm import LlmClient
 from .models import ChapterRange, Lecture, RetrievalOutcome, RunRecord
-from .render import provenance_report
-from .retrieval import TextbookGate
+from .pipeline.render import provenance_report
+from .pipeline.retrieval import TextbookGate
 from .store import Catalogue, Places, VectorStore
 
 NOTE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}

@@ -15,7 +15,7 @@ from pathlib import Path
 from jinja2 import Environment, StrictUndefined
 from markdown_it import MarkdownIt
 
-from .models import RetrievalOutcome
+from ..models import RetrievalOutcome
 
 TEXTBOOK_TAG = re.compile(r"\[C: pages (\d+)-(\d+)\]")
 CHECK_THIS = re.compile(r"\*\*Check this:\*\*")

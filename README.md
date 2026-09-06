@@ -157,13 +157,18 @@ studysynth/
 │   ├── __main__.py          # Entry point — launches the interface
 │   ├── config.py            # Every tunable threshold. One place.
 │   ├── models.py            # Domain types. No logic.
-│   ├── store.py             # SQLite catalogue · disk layout · Qdrant collections
-│   ├── llm.py               # Claude client, vision OCR, structured output, mock mode
-│   ├── embeddings.py        # Embedding backend behind one swappable interface
-│   ├── ingest.py            # Textbook chunking · slide extraction · note OCR
-│   ├── retrieval.py         # The seven anti-bloat mechanisms
-│   ├── graph.py             # LangGraph nodes, checkpointer, interrupt, verify loop
-│   ├── render.py            # Markdown → HTML/PDF, provenance tags, reports
+│   ├── store/               # Persistence
+│   │   ├── catalogue.py     #   SQLite: courses, lectures, runs, rejections
+│   │   ├── files.py         #   Disk layout — the only module that picks paths
+│   │   └── vectors.py       #   Qdrant: one collection per course
+│   ├── clients/             # The two external services, each behind an interface
+│   │   ├── llm.py           #   Claude: vision OCR, structured output, mock mode
+│   │   └── embeddings.py    #   Qwen locally, swappable by config
+│   ├── pipeline/            # The work itself
+│   │   ├── ingest.py        #   Textbook chunking · slides · handwriting OCR
+│   │   ├── retrieval.py     #   The seven anti-bloat mechanisms
+│   │   ├── graph.py         #   LangGraph nodes, checkpointer, review interrupt
+│   │   └── render.py        #   Markdown → HTML/PDF, provenance tags
 │   ├── services.py          # Everything the interface calls, wired once
 │   ├── ui.py                # The whole interface: home · course · lecture
 │   ├── evaluate.py          # Offline eval: coverage, bloat rate, citation validity

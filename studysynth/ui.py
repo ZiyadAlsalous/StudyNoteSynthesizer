@@ -16,7 +16,7 @@ import streamlit as st
 
 from studysynth.config import Settings, load
 from studysynth.models import ChapterRange, Lecture, NotePage, RetrievalOutcome, RunRecord
-from studysynth.render import provenance_report, to_html
+from studysynth.pipeline.render import provenance_report, to_html
 from studysynth.services import Library, ServiceError, build
 from studysynth.store import StoreError
 

@@ -1,46 +1,18 @@
-"""Persistence: SQLite metadata, disk layout, Qdrant collection operations.
-
-Three stores with one owner each. Nothing above this layer knows what a cursor
-or a Qdrant point looks like.
-"""
+"""SQLite: courses, lectures, chapters, runs, the rejection log."""
 
 from __future__ import annotations
 
 import sqlite3
 import threading
 from collections.abc import Callable, Iterable, Sequence
-from functools import wraps
 from datetime import datetime, timezone
+from functools import wraps
 from pathlib import Path
 from types import TracebackType
 from typing import Any, TypeVar
 
-from qdrant_client import QdrantClient
-from qdrant_client.http import models as qmodels
-
-from .config import Settings
-from .models import Chunk, ChapterRange, Lecture, Parent, Rejection, RunRecord
-
-
-class StoreError(RuntimeError):
-    """Raised when a store operation cannot complete."""
-
-
-class CollectionMissing(StoreError):
-    pass
-
-
-def _connect(settings: Settings) -> QdrantClient:
-    backend = settings.qdrant.backend
-    if backend == "memory":
-        return QdrantClient(location=":memory:")
-    if backend == "server":
-        return QdrantClient(url=settings.qdrant.url)
-    if backend == "local":
-        settings.paths.vectors.mkdir(parents=True, exist_ok=True)
-        return QdrantClient(path=str(settings.paths.vectors))
-    raise StoreError(f"Unknown qdrant backend {backend!r}")
-
+from ..models import ChapterRange, Lecture, Parent, Rejection, RunRecord
+from .errors import StoreError
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS courses (
@@ -110,6 +82,7 @@ CREATE INDEX IF NOT EXISTS parents_chapter ON parents (course, chapter);
 """
 
 
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -148,6 +121,7 @@ def _locked(method: F) -> F:
             return method(self, *args, **kwargs)
 
     return guarded  # type: ignore[return-value]
+
 
 
 class Catalogue:
@@ -400,156 +374,3 @@ class Catalogue:
             page_start=row["page_start"], page_end=row["page_end"],
             token_estimate=row["tokens"],
         )
-
-
-class Places:
-    """Disk layout. The only module that decides where a file goes."""
-
-    def __init__(self, settings: Settings) -> None:
-        self._paths = settings.paths
-
-    def course(self, course: str) -> Path:
-        return self._paths.courses / course
-
-    def textbook(self, course: str) -> Path:
-        return self.course(course) / "textbook.pdf"
-
-    def lecture(self, course: str, lecture: str) -> Path:
-        return self.course(course) / "lectures" / lecture
-
-    def slides_dir(self, course: str, lecture: str) -> Path:
-        target = self.lecture(course, lecture) / "slides"
-        target.mkdir(parents=True, exist_ok=True)
-        return target
-
-    def notes_dir(self, course: str, lecture: str) -> Path:
-        target = self.lecture(course, lecture) / "notes"
-        target.mkdir(parents=True, exist_ok=True)
-        return target
-
-    def clear(self, folder: Path) -> int:
-        """Replacing an upload removes what it replaces. Finished documents
-        live under runs/ and are never touched by this."""
-        removed = 0
-        if folder.is_dir():
-            for path in folder.iterdir():
-                if path.is_file():
-                    path.unlink()
-                    removed += 1
-        return removed
-
-    def run(self, run_id: str) -> Path:
-        return self._paths.runs / run_id
-
-    def artifact(self, run_id: str, name: str) -> Path:
-        target = self.run(run_id) / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        return target
-
-    def note_cache(self, content_hash: str) -> Path:
-        target = self._paths.root / "cache" / "ocr" / f"{content_hash}.md"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        return target
-
-
-class VectorStore:
-    """Qdrant. One collection per course, payload indexes at creation time."""
-
-    def __init__(self, settings: Settings) -> None:
-        self._settings = settings
-        self._client = _connect(settings)
-
-    def exists(self, course: str) -> bool:
-        """Whether this course's textbook is already embedded.
-
-        The whole point of persisting: embedding a 1600-page book takes
-        minutes, and it must happen once per course, not once per run.
-        """
-        return bool(self._client.collection_exists(self.collection_for(course)))
-
-    def count(self, course: str) -> int:
-        if not self.exists(course):
-            return 0
-        return int(self._client.count(self.collection_for(course)).count)
-
-    def drop(self, course: str) -> None:
-        if self.exists(course):
-            self._client.delete_collection(self.collection_for(course))
-
-    @staticmethod
-    def collection_for(course: str) -> str:
-        return f"course_{course}"
-
-    def create(self, course: str, dimensions: int) -> str:
-        name = self.collection_for(course)
-        if self._client.collection_exists(name):
-            return name
-        self._client.create_collection(
-            collection_name=name,
-            vectors_config=qmodels.VectorParams(
-                size=dimensions,
-                distance=qmodels.Distance[self._settings.qdrant.distance.upper()],
-            ),
-        )
-        # Declared here, not later: chapter scoping (spec 7.2) must filter
-        # before the vector search, and that requires the index to exist first.
-        for field in self._settings.qdrant.payload_indexes:
-            self._client.create_payload_index(
-                collection_name=name,
-                field_name=field,
-                field_schema=(
-                    qmodels.PayloadSchemaType.INTEGER
-                    if field.startswith("page")
-                    else qmodels.PayloadSchemaType.KEYWORD
-                ),
-            )
-        return name
-
-    def upsert(self, course: str, chunks: Sequence[Chunk], vectors: Sequence[Sequence[float]]) -> int:
-        if len(chunks) != len(vectors):
-            raise StoreError(f"{len(chunks)} chunks against {len(vectors)} vectors")
-        name = self.collection_for(course)
-        if not self._client.collection_exists(name):
-            raise CollectionMissing(f"Collection {name} does not exist")
-        points = [
-            qmodels.PointStruct(
-                id=index,
-                vector=list(vector),
-                payload={
-                    "chunk_id": chunk.id,
-                    "chapter": chunk.chapter,
-                    "section_path": chunk.section_path,
-                    "page_start": chunk.page_start,
-                    "page_end": chunk.page_end,
-                    "parent_id": chunk.parent_id,
-                    "text": chunk.text,
-                    "token_estimate": chunk.token_estimate,
-                },
-            )
-            for index, (chunk, vector) in enumerate(zip(chunks, vectors))
-        ]
-        self._client.upsert(collection_name=name, points=points)
-        return len(points)
-
-    def search(
-        self, course: str, vector: Sequence[float], chapters: Sequence[str], limit: int
-    ) -> list[tuple[float, dict[str, object]]]:
-        """Chapter filter is passed to Qdrant, never applied to the results."""
-        name = self.collection_for(course)
-        if not self._client.collection_exists(name):
-            raise CollectionMissing(f"Collection {name} does not exist")
-        condition = qmodels.Filter(
-            must=[
-                qmodels.FieldCondition(
-                    key="chapter", match=qmodels.MatchAny(any=list(chapters))
-                )
-            ]
-        )
-        found = self._client.query_points(
-            collection_name=name,
-            query=list(vector),
-            query_filter=condition,
-            limit=limit,
-            with_payload=True,
-        )
-        return [(point.score, dict(point.payload or {})) for point in found.points]

@@ -9,9 +9,9 @@ from __future__ import annotations
 import pytest
 
 from studysynth.config import Settings
-from studysynth.embeddings import MockEmbeddings
+from studysynth.clients.embeddings import MockEmbeddings
 from studysynth.models import Reason
-from studysynth.retrieval import TextbookGate
+from studysynth.pipeline.retrieval import TextbookGate
 
 from .conftest import StubLlm, make_candidate, make_concept, make_draft, make_gap
 

@@ -16,9 +16,9 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Sequence
 
-from .ingest import estimate_tokens
+from .pipeline.ingest import estimate_tokens
 from .models import RetrievalOutcome
-from .render import TEXTBOOK_TAG
+from .pipeline.render import TEXTBOOK_TAG
 
 
 class EvaluationError(RuntimeError):
