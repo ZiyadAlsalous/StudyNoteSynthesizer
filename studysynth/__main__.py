@@ -1,9 +1,4 @@
-"""Command line entry point.
-
-    python -m studysynth ui
-
-Streamlit owns its own server, so this hands off rather than importing it.
-"""
+"""Command line entry point: launches the Streamlit interface."""
 
 from __future__ import annotations
 

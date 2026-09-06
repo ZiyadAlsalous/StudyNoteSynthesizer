@@ -1,10 +1,4 @@
-"""Offline evaluation against a labeled chapter.
-
-Run: python -m studysynth.evaluate --labels labels.json --document out.md
-
-Bloat rate is the metric this project exists to keep down; the others exist so
-that keeping it down cannot be achieved by producing a worse document.
-"""
+"""Offline evaluation against a labeled chapter."""
 
 from __future__ import annotations
 
@@ -27,8 +21,7 @@ class EvaluationError(RuntimeError):
 
 @dataclass
 class Labels:
-    """Hand-verified ground truth for one chapter. Building this is tedious and
-    skipping it turns the eval harness into decoration."""
+    """Hand-verified ground truth for one chapter."""
 
     course: str
     chapter: str
@@ -69,8 +62,7 @@ def coverage(document: str, concepts: Sequence[str]) -> float:
 
 
 def bloat_rate(document: str) -> float:
-    """Textbook tokens over total document tokens, measured on the output rather
-    than on what the gate thought it admitted."""
+    """Textbook tokens over total tokens, measured on the finished document."""
     total = estimate_tokens(document)
     if total == 0:
         return 0.0
@@ -83,9 +75,7 @@ def bloat_rate(document: str) -> float:
 
 
 def citation_validity(document: str, page_count: int) -> float:
-    """Share of page citations that could resolve. A citation past the end of
-    the source is the cheap half of the check; the model-graded half is in the
-    verify node."""
+    """Share of page citations that could resolve."""
     citations = re.findall(r"\(Pages? ([\d,\s-]+)\)", document) + [
         f"{a}-{b}" for a, b in TEXTBOOK_TAG.findall(document)
     ]

@@ -25,18 +25,14 @@ def _connect(settings: Settings) -> QdrantClient:
 
 
 class VectorStore:
-    """Qdrant. One collection per course, payload indexes at creation time."""
+    """Qdrant: one collection per course, payload indexes at creation time."""
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._client = _connect(settings)
 
     def exists(self, course: str) -> bool:
-        """Whether this course's textbook is already embedded.
-
-        The whole point of persisting: embedding a 1600-page book takes
-        minutes, and it must happen once per course, not once per run.
-        """
+        """Whether this course's textbook is already embedded."""
         return bool(self._client.collection_exists(self.collection_for(course)))
 
     def count(self, course: str) -> int:
@@ -63,8 +59,7 @@ class VectorStore:
                 distance=qmodels.Distance[self._settings.qdrant.distance.upper()],
             ),
         )
-        # Declared here, not later: chapter scoping (spec 7.2) must filter
-        # before the vector search, and that requires the index to exist first.
+        # Declared here, not later: chapter scoping (spec 7.2) must filter before the vector se.
         for field in self._settings.qdrant.payload_indexes:
             self._client.create_payload_index(
                 collection_name=name,

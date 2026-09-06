@@ -1,9 +1,4 @@
-"""Everything the interface needs, wired together once.
-
-The Streamlit page calls these directly. There is no queue and no background
-thread: a run is a generator the page consumes, so progress is whatever the
-graph has just finished.
-"""
+"""Everything the interface needs, wired together once."""
 
 from __future__ import annotations
 
@@ -36,7 +31,7 @@ class ServiceError(RuntimeError):
 
 @dataclass
 class Library:
-    """Constructed once per process. Holds the embedding model and the index."""
+    """Constructed once per process."""
 
     settings: Settings
     catalogue: Catalogue
@@ -66,15 +61,14 @@ class Library:
     # textbook ---------------------------------------------------------------
 
     def textbook_status(self, course: str) -> dict[str, object] | None:
-        """None when no book is indexed. Otherwise what is already in the index,
-        which is why a book is embedded once and not once per run."""
+        """None when no book is indexed."""
         recorded = self.catalogue.textbook(course)
         if recorded and self.vectors.exists(course):
             return recorded
         return None
 
     def index_textbook(self, course: str, pdf: Path, filename: str) -> tuple[int, int]:
-        """Parse, chunk, embed and index. Returns (chapters, chunks)."""
+        """Parse, chunk, embed and index."""
         try:
             ranges = chapter_ranges(pdf)
         except OutlineMissing:
@@ -142,8 +136,7 @@ class Library:
     def replace_notes(
         self, course: str, lecture_id: str, uploads: Sequence[tuple[str, bytes]]
     ) -> int:
-        """A student re-photographs their notes often. The old images go, so a
-        run never mixes two versions of the same page."""
+        """A student re-photographs their notes often."""
         folder = self.places.notes_dir(course, lecture_id)
         self.places.clear(folder)
         for position, (name, data) in enumerate(uploads, start=1):

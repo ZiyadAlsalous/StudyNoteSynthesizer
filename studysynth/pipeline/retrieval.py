@@ -1,10 +1,4 @@
-"""Spec section 7. The seven mechanisms that stand between textbook and output.
-
-Each mechanism is a separate method that takes candidates and returns the
-survivors plus a rejection for everything it dropped. Nothing here fails
-silently: a candidate either survives with a recorded score or appears in the
-rejection log with the mechanism that killed it and why.
-"""
+"""Spec section 7: the seven mechanisms that keep the textbook out of the document."""
 
 from __future__ import annotations
 
@@ -73,11 +67,7 @@ class TextbookGate:
     # 7.1 gap-triggered querying ------------------------------------------------
 
     def retrieve(self, course: str, chapter: str, gaps: Sequence[Gap]) -> list[Candidate]:
-        """The textbook is queried once per gap and never otherwise.
-
-        There is no entry point here that takes free text. If the concept and
-        gap extraction found nothing unresolved, the textbook is not read at all.
-        """
+        """The textbook is queried once per gap and never otherwise."""
         if not gaps:
             return []
         chapters = self._scope(course, chapter)
@@ -105,7 +95,7 @@ class TextbookGate:
 
     @staticmethod
     def _dedupe(candidates: Sequence[Candidate]) -> list[Candidate]:
-        """Two gaps often reach the same section. Grade it once."""
+        """Two gaps often reach the same section."""
         best: dict[str, Candidate] = {}
         for candidate in candidates:
             existing = best.get(candidate.parent_id)
@@ -116,7 +106,7 @@ class TextbookGate:
     # 7.2 chapter scoping -------------------------------------------------------
 
     def _scope(self, course: str, chapter: str) -> list[str]:
-        """Which chapters the filter admits. Passed to Qdrant, not applied after."""
+        """Which chapters the filter admits."""
         if not self._config.allow_adjacent_chapters:
             return [chapter]
         ordered = [span.chapter for span in self._catalogue.chapters(course)]
@@ -127,8 +117,7 @@ class TextbookGate:
         return window
 
     def check_scope(self, candidates: Sequence[Candidate], allowed: Sequence[str]) -> Survivors:
-        """Belt and braces: the index filter should make this a no-op. If it
-        ever rejects something, the payload index is missing or misdeclared."""
+        """Belt and braces: the index filter should make this a no-op."""
         kept, rejected = [], []
         for candidate in candidates:
             if candidate.chapter in allowed:
@@ -187,12 +176,7 @@ class TextbookGate:
         gaps: Sequence[Gap],
         drafts: Sequence[DraftedConcept],
     ) -> Survivors:
-        """A different question from relevance: does the student still need it?
-
-        Graded against what has already been drafted from slides and notes, not
-        against the gap alone. This is where correct, on-topic, unnecessary prose
-        dies.
-        """
+        """A different question from relevance: does the student still need it? Graded agains."""
         questions = {gap.id: gap.question for gap in gaps}
         draft_text = "\n\n".join(f"### {d.heading}\n{d.body}" for d in drafts)
         kept, rejected = [], []
@@ -261,8 +245,7 @@ class TextbookGate:
     def guard_new_concepts(
         self, candidates: Sequence[Candidate], concepts: Sequence[Concept]
     ) -> Survivors:
-        """The slides define the examinable surface. The textbook may explain
-        what is on them; it may never add to them."""
+        """The slides define the examinable surface."""
         if not self._config.new_concept_guard:
             return list(candidates), []
         names = ", ".join(concept.name for concept in concepts)
@@ -291,11 +274,7 @@ class TextbookGate:
     # 7.7 budget enforcement ----------------------------------------------------
 
     def budget_for(self, document_tokens: int) -> int:
-        """The binding constraint, whichever of the two ceilings is tighter.
-
-        The fraction is of the finished document, so a chapter with a thin draft
-        gets a small budget however generous the absolute cap is.
-        """
+        """The binding constraint, whichever of the two ceilings is tighter."""
         fraction = self._config.max_textbook_fraction
         if fraction >= 1.0:
             proportional = self._config.textbook_token_budget

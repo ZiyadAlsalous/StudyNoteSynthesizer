@@ -1,9 +1,4 @@
-"""Turning three kinds of source into chunks the rest of the system can use.
-
-Textbook chunking is structural: headings first, then size, never mid-table or
-mid-formula. Slide and note handling differ because a slide deck is not prose
-and a photograph of handwriting is not text at all.
-"""
+"""Turning three kinds of source into chunks the rest of the system can use."""
 
 from __future__ import annotations
 
@@ -47,11 +42,7 @@ def content_hash(data: bytes) -> str:
 
 
 def chapter_ranges(pdf: Path, level: int | None = None) -> list[ChapterRange]:
-    """Read chapter boundaries from the PDF outline.
-
-    Raises rather than guessing. A wrong page range silently poisons chapter
-    scoping (spec 7.2), so the UI override exists for exactly this case.
-    """
+    """Read chapter boundaries from the PDF outline."""
     import pypdf
 
     reader = pypdf.PdfReader(str(pdf))
@@ -66,8 +57,7 @@ def chapter_ranges(pdf: Path, level: int | None = None) -> list[ChapterRange]:
     for index, (own_depth, title, start) in enumerate(entries):
         if own_depth != depth:
             continue
-        # A chapter ends where the next entry at its level or shallower begins,
-        # never where its own first subsection begins.
+        # A chapter ends where the next entry at its level or shallower begins, never where its.
         end = total
         for later_depth, _, later_start in entries[index + 1 :]:
             if later_depth <= depth:
@@ -101,12 +91,7 @@ def _flatten(outline: object, reader: object, depth: int = 0) -> list[tuple[int,
 
 
 def _chapter_depth(entries: list[tuple[int, str, int]]) -> int:
-    """The shallowest outline level that looks like numbered chapters.
-
-    Textbooks nest parts above chapters and sections below them. Taking every
-    level flattens `4 Divide-and-Conquer` against `4.1 Multiplying matrices`,
-    which truncates the chapter to the pages before its first subsection.
-    """
+    """The shallowest outline level that looks like numbered chapters."""
     by_depth: dict[int, int] = {}
     for depth, title, _ in entries:
         if _CHAPTER_NUMBER.match(title.strip()):
@@ -149,8 +134,7 @@ class TextbookIngestor:
         return [page.extract_text() or "" for page in reader.pages]
 
     def _sections(self, body: str, course: str, span: ChapterRange) -> list[Parent]:
-        """Split on headings first. A section longer than parent_tokens is split
-        again at paragraph boundaries, never inside a table or a display formula."""
+        """Split on headings first, then size, never inside a table or formula."""
         marks = list(_HEADING.finditer(body))
         if not marks:
             blocks = [(span.title or span.chapter, body)]
@@ -184,12 +168,7 @@ class TextbookIngestor:
 
     @staticmethod
     def _split_to_size(text: str, limit: int) -> list[str]:
-        """Split text so no piece exceeds `limit` tokens.
-
-        Measured in characters throughout, because `estimate_tokens` floors:
-        summing a per-line estimate undercounts the joined string and lets
-        pieces drift over the limit.
-        """
+        """Split text so no piece exceeds `limit` tokens."""
         budget = limit * _CHARS_PER_TOKEN
         if len(text) <= budget:
             return [text]
@@ -206,18 +185,13 @@ class TextbookIngestor:
                 current, size = [], 0
 
         for line in text.splitlines(keepends=True):
-            # Decided against the state *before* this line's fence: the line
-            # that closes a formula must stay with the formula, and the line
-            # that opens one is a valid place to start a new chunk.
+            # Decided against the state *before* this line's fence: the line that closes a form.
             was_in_formula = in_formula
             if _FORMULA_FENCE.search(line):
                 in_formula = not in_formula
-            # Extracted PDF text often has no blank lines at all, so breaking
-            # only on paragraphs would mean never breaking. Any line boundary
-            # will do, as long as it is not inside a formula or a table.
+            # Extracted PDF text often has no blank lines at all, so breaking only on paragraph.
             breakable = not was_in_formula and not _TABLE_ROW.match(line)
-            # A single line can be longer than the whole budget; sentence ends
-            # are the only remaining boundary inside one.
+            # A single line can be longer than the whole budget; sentence ends are the only rem.
             parts = (
                 TextbookIngestor._sentences(line, budget) if len(line) > budget else [line]
             )
@@ -231,7 +205,7 @@ class TextbookIngestor:
 
     @staticmethod
     def _sentences(text: str, budget: int) -> list[str]:
-        """Break one over-long line at sentence ends. `budget` is characters."""
+        """Break one over-long line at sentence ends."""
         parts: list[str] = []
         current = ""
         for piece in _SENTENCE.split(text):
@@ -327,11 +301,7 @@ class SlideIngestor:
 
 
 class NoteIngestor:
-    """Handwriting to Markdown, cached by content hash.
-
-    OCR on handwriting is the least reliable step in the system, which is why
-    the graph interrupts for review right after this runs.
-    """
+    """Handwriting to Markdown, cached by content hash."""
 
     def __init__(self, settings: Settings, client: LlmClient, places: Places) -> None:
         self._client = client

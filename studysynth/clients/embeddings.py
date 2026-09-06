@@ -1,9 +1,4 @@
-"""Embedding backends behind one interface.
-
-The interface exists because the spec calls for swapping Qwen3-Embedding-8B
-down to the 4B or 0.6B variants by config, and because retrieval tests must run
-without downloading a model.
-"""
+"""Embedding backends behind one interface."""
 
 from __future__ import annotations
 
@@ -28,8 +23,7 @@ class EmbeddingError(RuntimeError):
 
 
 class EmbeddingBackend(ABC):
-    """Documents and queries embed differently: the instruction prefix on a
-    Qwen3 model belongs on queries only."""
+    """Queries carry an instruction prefix, documents do not."""
 
     @property
     @abstractmethod
@@ -43,12 +37,7 @@ class EmbeddingBackend(ABC):
 
 
 class MockEmbeddings(EmbeddingBackend):
-    """Deterministic hashed bag-of-words, L2-normalized.
-
-    Not a semantic model, but it produces real cosine geometry: identical text
-    scores 1.0, paraphrases score high, unrelated text scores low. That is
-    exactly the property the novelty filter (spec 7.5) is tested against.
-    """
+    """Deterministic hashed bag-of-words, L2-normalized."""
 
     def __init__(self, dimensions: int) -> None:
         self._dimensions = dimensions
@@ -92,12 +81,7 @@ class QwenEmbeddings(EmbeddingBackend):
 
     @property
     def dimensions(self) -> int:
-        """Asked of the model, not the config.
-
-        Qdrant sizes its collection from this, and the Qwen3 variants differ
-        (0.6B is 1024, 4B is 2560, 8B is 4096). A stale config value here is a
-        vector-size mismatch at upsert time, long after the mistake was made.
-        """
+        """Asked of the model, not the config."""
         reported = self._load().get_sentence_embedding_dimension()
         return int(reported) if reported else self._settings.dimensions
 

@@ -1,10 +1,4 @@
-"""Claude client and its mock twin, behind one interface.
-
-Prompts are never written in Python. They live in `prompts/*.md` and load by
-name. The mock backend is driven by fixture files so the whole pipeline runs
-without an API key; a prompt with no fixture raises rather than returning
-something empty.
-"""
+"""Claude client and its mock twin, behind one interface."""
 
 from __future__ import annotations
 
@@ -67,12 +61,7 @@ class LlmClient(ABC):
 
 
 class MockLlm(LlmClient):
-    """Replays `fixtures/llm/<job>.json`.
-
-    Fixture shape: `{"default": <response>, "by_key": {"<key>": <response>}}`.
-    A response is a string for `complete`/`vision` and an object for
-    `structured`.
-    """
+    """Replays `fixtures/llm/<job>.json`."""
 
     def __init__(self, fixtures: Path) -> None:
         self._fixtures = fixtures
@@ -131,8 +120,7 @@ class ClaudeLlm(LlmClient):
 
             key = self._settings.anthropic_api_key
             try:
-                # No key given falls through to the SDK's own resolution:
-                # an exported variable, or an `ant auth login` profile.
+                # No key given falls through to the SDK's own resolution: an exported variable.
                 self._client = anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
             except Exception as error:
                 raise MissingCredentials(

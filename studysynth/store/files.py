@@ -1,4 +1,4 @@
-"""Disk layout. The only module that decides where a file goes."""
+"""Disk layout: the only module that decides where a file goes."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from ..config import Settings
 
 
 class Places:
-    """Disk layout. The only module that decides where a file goes."""
+    """One folder per course, one per lecture, one per run."""
 
     def __init__(self, settings: Settings) -> None:
         self._paths = settings.paths
@@ -33,8 +33,7 @@ class Places:
         return target
 
     def clear(self, folder: Path) -> int:
-        """Replacing an upload removes what it replaces. Finished documents
-        live under runs/ and are never touched by this."""
+        """Replacing an upload removes what it replaces."""
         removed = 0
         if folder.is_dir():
             for path in folder.iterdir():

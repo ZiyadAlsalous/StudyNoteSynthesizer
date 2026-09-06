@@ -1,9 +1,4 @@
-"""LangGraph assembly: nodes, edges, checkpointer, interrupt, verify loop.
-
-A node does one thing and fails visibly. Nothing here swallows an exception to
-keep a run alive: the checkpointer means a failed run resumes at the node that
-failed rather than starting over.
-"""
+"""LangGraph assembly: nodes, edges, checkpointer, interrupt, verify loop."""
 
 from __future__ import annotations
 
@@ -57,7 +52,7 @@ class VerifyVerdict(BaseModel):
 
 
 class Nodes:
-    """The node bodies. Kept off the graph so each can be called in a test."""
+    """The node bodies, kept off the graph so each can be called in a test."""
 
     def __init__(
         self,
@@ -113,8 +108,7 @@ class Nodes:
         return {"gaps": self._llm.structured(prompt, GapList, job="find_gaps").gaps}
 
     def draft_concepts(self, state: GraphState) -> dict[str, Any]:
-        """Drafted from slides and notes only. The textbook has not been read yet,
-        because necessity (spec 7.4) is graded against this draft."""
+        """Drafted from slides and notes only."""
         slides = {page.page: page.markdown for page in state.get("slides", [])}
         notes = _join(page.markdown for page in state.get("notes", []))
         drafts: list[DraftedConcept] = []
@@ -206,15 +200,14 @@ def _join(parts: Any) -> str:
 
 
 class Runner:
-    """Compiles the graph and streams a run. Owns the checkpointer's lifetime."""
+    """Compiles the graph and streams a run."""
 
     def __init__(self, settings: Settings, nodes: Nodes) -> None:
         self._settings = settings
         self._nodes = nodes
 
     def _needs_another_round(self, state: GraphState) -> str:
-        """Bounded: a verify loop that can spin forever is worse than an
-        unverified document, because it never ships either."""
+        """Bounded: a verify loop that can spin forever is worse than an unverified document."""
         rounds = state.get("verify_rounds", 0)
         if state.get("unverified") and rounds < self._settings.verify.max_rounds:
             return SYNTHESIZE
@@ -247,11 +240,7 @@ class Runner:
         return SqliteSaver.from_conn_string(str(self._settings.paths.checkpoints))
 
     def stream(self, run_id: str, **inputs: Any) -> Iterator[tuple[str, dict[str, Any]]]:
-        """Yields (node_name, update) as the run progresses.
-
-        Interrupts before concept extraction so the student can correct the OCR
-        transcript, which is the least reliable input in the system.
-        """
+        """Yields (node_name, update) as the run progresses."""
         self._settings.paths.checkpoints.parent.mkdir(parents=True, exist_ok=True)
         with self._saver() as saver:
             app = self._graph().compile(checkpointer=saver, interrupt_before=[EXTRACT_CONCEPTS])
@@ -282,6 +271,5 @@ class Runner:
             update: dict[str, Any] = {"notes_approved": True}
             if edited is not None:
                 update["notes"] = edited
-            # as_node is required: slides and notes ingest in parallel, so
-            # LangGraph cannot infer which branch this update belongs to.
+            # as_node is required: slides and notes ingest in parallel, so LangGraph cannot inf.
             app.update_state(config, update, as_node=INGEST_NOTES)

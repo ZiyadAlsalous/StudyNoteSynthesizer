@@ -1,8 +1,4 @@
-"""Domain types. No logic lives here.
-
-Every boundary in the system passes one of these. If a dict is crossing a module
-boundary, a type is missing.
-"""
+"""Domain types. No logic lives here."""
 
 from __future__ import annotations
 
@@ -14,7 +10,7 @@ from pydantic import BaseModel, Field
 
 
 class Source(StrEnum):
-    """Spec section 2. The authority ranking, in order."""
+    """Spec section 2: the authority ranking, in order."""
 
     SLIDES = "A"
     NOTES = "B"
@@ -36,7 +32,7 @@ class GapKind(StrEnum):
 
 
 class Reason(StrEnum):
-    """Why a textbook candidate was rejected. One value per spec 7.2-7.7."""
+    """Why a textbook candidate was rejected."""
 
     OUT_OF_CHAPTER = "out_of_chapter"
     BELOW_RELEVANCE = "below_relevance"
@@ -73,7 +69,7 @@ class Lecture(BaseModel):
 
 
 class Chunk(BaseModel):
-    """A child chunk: what gets embedded. Small, for retrieval precision."""
+    """A child chunk: what gets embedded."""
 
     id: str
     course: str
@@ -88,7 +84,7 @@ class Chunk(BaseModel):
 
 
 class Parent(BaseModel):
-    """A parent section: what gets handed to the model. Large, for context."""
+    """A parent section: what gets handed to the model."""
 
     id: str
     course: str
@@ -129,7 +125,7 @@ class Concept(BaseModel):
 
 
 class Gap(BaseModel):
-    """A concept the slides raise but do not resolve. The only query trigger."""
+    """A concept the slides raise but do not resolve."""
 
     id: str
     concept_id: str
@@ -139,7 +135,7 @@ class Gap(BaseModel):
 
 
 class Candidate(BaseModel):
-    """A retrieved textbook passage under consideration. Not yet admitted."""
+    """A retrieved textbook passage under consideration."""
 
     id: str
     gap_id: str
@@ -171,7 +167,7 @@ class Admitted(BaseModel):
 
 
 class Rejection(BaseModel):
-    """Spec 7.8. Every rejection is logged with mechanism, reason and score."""
+    """Spec 7.8: why a textbook candidate was rejected, with its score."""
 
     candidate_id: str
     gap_id: str
@@ -209,7 +205,7 @@ class RunRecord(BaseModel):
 
 
 class GraphState(TypedDict, total=False):
-    """LangGraph channel state. Lists accumulate; scalars overwrite."""
+    """LangGraph channel state: lists accumulate, scalars overwrite."""
 
     run_id: str
     course: str
@@ -218,8 +214,7 @@ class GraphState(TypedDict, total=False):
     slides_dir: str
     notes_dir: str
 
-    # Written by one node each and replaced wholesale at the review
-    # interrupt, so these must not accumulate.
+    # Written by one node each and replaced wholesale at the review interrupt, so these must no.
     slides: list[SlidePage]
     notes: list[NotePage]
     notes_approved: bool

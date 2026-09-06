@@ -1,9 +1,4 @@
-"""Markdown to HTML and PDF, provenance tagging, and the rejection report.
-
-Provenance is the point of this module. The student must be able to see at a
-glance which sentences came from the textbook, because those are the ones the
-professor never said.
-"""
+"""Markdown to HTML and PDF, provenance tagging, and the rejection report."""
 
 from __future__ import annotations
 
@@ -50,14 +45,14 @@ REPORT_MD = """# Provenance report — {{ course }} / {{ chapter }}
 Textbook tokens admitted: **{{ outcome.tokens_admitted }}** of a **{{ outcome.budget }}** budget.
 Passages admitted: **{{ outcome.admitted | length }}**. Rejected: **{{ outcome.rejections | length }}**.
 
-## Rejections by mechanism
+# Rejections by mechanism
 
 | Mechanism | Rejected |
 |---|---|
 {% for mechanism, count in by_mechanism -%}
 | {{ mechanism }} | {{ count }} |
 {% endfor %}
-## Admitted passages
+# Admitted passages
 
 {% for passage in outcome.admitted -%}
 - pages {{ passage.page_start }}-{{ passage.page_end }}, necessity {{ '%.2f' % passage.necessity }}, {{ passage.token_estimate }} tokens
@@ -73,11 +68,7 @@ def _environment() -> Environment:
 
 
 def tag_provenance(markdown: str) -> str:
-    """Wrap textbook passages and recorded disagreements so CSS can color them.
-
-    Runs before the Markdown parser, on the source, because the tags are written
-    into the text by the synthesis step and would otherwise be invisible.
-    """
+    """Wrap textbook passages and recorded disagreements so CSS can color them."""
 
     def wrap(match: re.Match[str]) -> str:
         return (

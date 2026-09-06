@@ -1,11 +1,4 @@
-"""The whole interface: a home page of courses, and a page per course.
-
-Streamlit reruns this script on every interaction, so the page is a function of
-two query parameters and whatever the graph has checkpointed. Nothing important
-lives in session state except the run currently being watched.
-
-Run with: python -m studysynth ui
-"""
+"""The whole interface: a home page of courses, and a page per course."""
 
 from __future__ import annotations
 
@@ -354,8 +347,7 @@ def watch(shelf: Library, run_id: str) -> None:
 
 
 def review(shelf: Library, run_id: str) -> None:
-    """The interrupt. Handwriting OCR is the least reliable input in the system,
-    so it is corrected before anything is built on top of it."""
+    """The interrupt: handwriting OCR is the least reliable input, so it is corrected here."""
     st.subheader("Check the transcript")
     st.caption("Anything wrong here is wrong in the finished document.")
 

@@ -109,11 +109,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 
 def _locked(method: F) -> F:
-    """Serialize access to the connection.
-
-    Runs execute on their own threads while the API answers on another, and a
-    sqlite3 connection is not safe to share across threads without this.
-    """
+    """Serialize access to the connection."""
 
     @wraps(method)
     def guarded(self: "Catalogue", *args: Any, **kwargs: Any) -> Any:
@@ -240,7 +236,7 @@ class Catalogue:
     def set_lecture_sources(
         self, course: str, lecture_id: str, slides_name: str | None, note_count: int | None
     ) -> None:
-        """Called after an upload. Either half can change on its own."""
+        """Called after an upload; either half can change on its own."""
         if slides_name is not None:
             self._db.execute(
                 "UPDATE lectures SET slides_name = ? WHERE course = ? AND id = ?",

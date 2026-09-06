@@ -1,8 +1,4 @@
-"""Every tunable threshold in the system. One place, by design.
-
-Section 7 of the spec is enforced entirely by the numbers in `RetrievalSettings`.
-Changing the textbook budget means changing one line here and nowhere else.
-"""
+"""Every tunable threshold in the system."""
 
 from __future__ import annotations
 
@@ -65,12 +61,9 @@ class EmbeddingSettings(BaseModel):
 class QdrantSettings(BaseModel):
     url: str = "http://localhost:6333"
     # local: an on-disk collection, so a textbook is embedded once and reused.
-    # memory: tests only, nothing survives the process.
-    # server: a Qdrant container, the only mode where payload indexes apply.
     backend: str = "local"
     distance: str = "Cosine"
-    # Declared at collection creation so chapter scoping (spec 7.2) filters
-    # before the vector search rather than after it.
+    # Declared at collection creation so chapter scoping (spec 7.2) filters before the vector s.
     payload_indexes: tuple[str, ...] = ("chapter", "section_path", "page_start")
 
 
@@ -82,7 +75,7 @@ class ChunkSettings(BaseModel):
 
 
 class RetrievalSettings(BaseModel):
-    """Spec section 7. Every threshold that stands between textbook and output."""
+    """Spec section 7: every threshold standing between the textbook and the output."""
 
     # 7.2 chapter scoping
     allow_adjacent_chapters: bool = False
@@ -129,9 +122,7 @@ class Settings(BaseSettings):
 
     prompts_dir: Path = Path(__file__).parent / "prompts"
 
-    # Read here rather than left to the SDK's own environment lookup: settings
-    # loaded from a .env file never reach os.environ, so a key placed there
-    # would otherwise be silently ignored.
+    # Read here rather than left to the SDK's own environment lookup: settings loaded from a .e.
     anthropic_api_key: str | None = Field(
         default=None, validation_alias=AliasChoices("ANTHROPIC_API_KEY")
     )
@@ -140,8 +131,7 @@ class Settings(BaseSettings):
         if self.chunks.parent_tokens <= self.chunks.child_tokens:
             raise ConfigError("parent_tokens must exceed child_tokens")
         if self.retrieval.min_necessity < self.retrieval.min_relevance:
-            # Necessity is the stricter question; a looser bar would make 7.4
-            # a no-op behind 7.3.
+            # Necessity is the stricter question; a looser bar would make 7.4 a no-op behind 7..
             raise ConfigError("min_necessity must be >= min_relevance")
         return self
 
