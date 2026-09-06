@@ -29,8 +29,8 @@ logged with a reason and a score, and a run that rejects nothing is treated as a
   you misunderstood.
 - **Seven anti-bloat controls** — the product, described below.
 - **Human review interrupt** — the graph stops after OCR so you can fix the
-  transcription beside your own photo, because handwriting is the least reliable
-  thing the system reads.
+  transcription beside the page it came from, because handwriting is the least
+  reliable thing the system reads.
 - **Crash-resumable runs** — a SQLite checkpointer means a failed run resumes at the
   node that failed instead of re-transcribing everything.
 - **The textbook is embedded once** — parsed, chunked and written to an on-disk vector

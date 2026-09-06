@@ -241,17 +241,20 @@ def uploads_section(shelf: Library, course: str, lecture: Lecture) -> None:
         st.markdown("**Your handwritten notes**")
         if lecture.note_count:
             st.success(f"{lecture.note_count} pages saved")
-        st.caption("A scanned PDF, or photos one per page. Replacing them removes the old ones.")
-        photos = st.file_uploader(
-            "Notes", type=["pdf", "png", "jpg", "jpeg", "webp"], accept_multiple_files=True,
-            key=f"notes-{lecture.id}", label_visibility="collapsed",
+        st.caption("One PDF of any length — a GoodNotes export or a scan. Replacing it removes the old one.")
+        notes = st.file_uploader(
+            "Notes", type=["pdf"], key=f"notes-{lecture.id}", label_visibility="collapsed",
         )
-        if photos and st.button("Save notes", key=f"save-notes-{lecture.id}"):
-            saved = shelf.replace_notes(
-                course, lecture.id, [(f.name, f.getbuffer().tobytes()) for f in photos]
-            )
-            st.success(f"{saved} pages saved, previous ones removed.")
-            st.rerun()
+        if notes is not None and st.button("Save notes", key=f"save-notes-{lecture.id}"):
+            try:
+                pages = shelf.replace_notes(
+                    course, lecture.id, notes.name, notes.getbuffer().tobytes()
+                )
+            except ServiceError as error:
+                st.error(str(error))
+            else:
+                st.success(f"{pages} pages saved, the previous notes removed.")
+                st.rerun()
 
 
 def start_section(shelf: Library, course: str, lecture: Lecture) -> None:

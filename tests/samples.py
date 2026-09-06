@@ -6,8 +6,6 @@ opaque, and reportlab is a dependency this project does not otherwise need.
 
 from __future__ import annotations
 
-import struct
-import zlib
 from pathlib import Path
 
 
@@ -56,27 +54,4 @@ def write_pdf(path: Path, pages: list[list[str]]) -> Path:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(bytes(out))
-    return path
-
-
-def write_png(path: Path, seed: int = 0) -> Path:
-    """A 1x1 PNG. Content is irrelevant; the content hash is what matters."""
-    raw = bytes([0, seed % 256, (seed * 7) % 256, (seed * 13) % 256])
-
-    def chunk(kind: bytes, payload: bytes) -> bytes:
-        return (
-            struct.pack(">I", len(payload))
-            + kind
-            + payload
-            + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
-        )
-
-    png = (
-        b"\x89PNG\r\n\x1a\n"
-        + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
-        + chunk(b"IDAT", zlib.compress(raw))
-        + chunk(b"IEND", b"")
-    )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(png)
     return path

@@ -21,7 +21,6 @@ from .pipeline.render import provenance_report
 from .pipeline.retrieval import TextbookGate
 from .store import Catalogue, Places, VectorStore
 
-NOTE_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
 SLIDE_SUFFIXES = {".pdf", ".pptx"}
 
 
@@ -133,40 +132,33 @@ class Library:
         (folder / _safe(name, SLIDE_SUFFIXES)).write_bytes(data)
         self.catalogue.set_lecture_sources(course, lecture_id, slides_name=name, note_count=None)
 
-    def replace_notes(
-        self, course: str, lecture_id: str, uploads: Sequence[tuple[str, bytes]]
-    ) -> int:
-        """A student re-photographs their notes often."""
+    def replace_notes(self, course: str, lecture_id: str, name: str, data: bytes) -> int:
+        """Notes are one PDF of any length. Replacing it removes the previous one,
+        so a run never mixes two versions of a page."""
+        if Path(name).suffix.lower() != ".pdf":
+            raise ServiceError(f"{name} must be a PDF")
         folder = self.places.notes_dir(course, lecture_id)
         self.places.clear(folder)
-        for position, (name, data) in enumerate(uploads, start=1):
-            suffix = Path(name).suffix.lower()
-            if suffix not in NOTE_SUFFIXES:
-                raise ServiceError(f"{name} must be a PDF or an image")
-            # A scanned PDF holds every page, so it keeps its own name.
-            stem = Path(name).stem if suffix == ".pdf" else f"page{position:03d}"
-            (folder / f"{stem}{suffix}").write_bytes(data)
-        return self._count_pages(course, lecture_id, folder)
+        shutil.rmtree(folder / "pages", ignore_errors=True)
+        target = folder / "notes.pdf"
+        target.write_bytes(data)
 
-    def _count_pages(self, course: str, lecture_id: str, folder: Path) -> int:
-        """A PDF counts as its page count, not as one file."""
-        import pymupdf
-
-        pages = 0
-        for path in folder.iterdir():
-            if path.suffix.lower() == ".pdf":
-                try:
-                    with pymupdf.open(str(path)) as document:  # type: ignore[no-untyped-call]
-                        pages += document.page_count
-                except Exception as error:
-                    path.unlink(missing_ok=True)
-                    raise ServiceError(f"{path.name} could not be read as a PDF") from error
-            elif path.suffix.lower() in NOTE_SUFFIXES:
-                pages += 1
+        pages = self._page_count(target)
         self.catalogue.set_lecture_sources(
             course, lecture_id, slides_name=None, note_count=pages
         )
         return pages
+
+    @staticmethod
+    def _page_count(pdf: Path) -> int:
+        import pymupdf
+
+        try:
+            with pymupdf.open(str(pdf)) as document:  # type: ignore[no-untyped-call]
+                return int(document.page_count)
+        except Exception as error:
+            pdf.unlink(missing_ok=True)
+            raise ServiceError(f"{pdf.name} could not be read as a PDF") from error
 
     # runs -------------------------------------------------------------------
 

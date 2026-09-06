@@ -1,6 +1,6 @@
 {
   "by_key": {
-    "note1.png": "# Induction\n\nInductive hypothesis = what you may assume.\nInductive step = what you still owe.\n\n$$P(k) \\Rightarrow P(k+1)$$",
-    "note2.png": "# Loop invariants\n\nnot sure I follow this one - ask in office hours\n[illegible] before the loop, after each pass, and at exit"
+    "notes-page0001.png": "# Induction\n\nInductive hypothesis = what you may assume.\nInductive step = what you still owe.\n\n$$P(k) \\Rightarrow P(k+1)$$",
+    "notes-page0002.png": "# Loop invariants\n\nnot sure I follow this one - ask in office hours\n[illegible] before the loop, after each pass, and at exit"
   }
 }
