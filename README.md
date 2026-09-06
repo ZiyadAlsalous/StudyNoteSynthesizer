@@ -1,127 +1,197 @@
-# Study Note Synthesizer
+# 📚 Study Note Synthesizer — Your Notes, Completed
 
-Turns your handwritten lecture notes into an exam-ready study document per
-chapter. The slides define what is examinable, your notes add the reasoning, and
-the textbook is allowed in only where the first two leave a real gap.
+Your handwritten lecture notes, completed against your professor's slides, with the
+course textbook allowed in **only where they leave a real gap**. Everything runs on
+your own machine with your own API key.
 
-`study-synthesizer-spec.md` is the source of truth for behaviour. This file is
-how to run it.
+---
 
-## Quickstart
+## Overview
 
-    python -m venv .venv && source .venv/bin/activate
-    pip install -e ".[claude,qwen,dev]"
-    cp .env.example .env        # then paste your Anthropic key
-    python -m studysynth ui
+Photograph your handwritten notes for a lecture. Point the app at your professor's
+slide deck and, optionally, the course textbook. It returns one exam-ready study
+document: everything from the slides, your own reasoning folded in beside the point
+it explains, and disagreements between the two shown rather than silently resolved.
 
-Open http://localhost:8501. Everything runs locally: the only thing that leaves
-your machine is the Claude API call, using your own key.
+The hard part is not writing the document. It is **keeping the textbook out of it**.
+A textbook is written to be read over a term; a study document is read the night
+before an exam. Admit textbook prose freely and the useful part drowns. So seven
+separate mechanisms stand between the textbook and the output, every rejection is
+logged with a reason and a score, and a run that rejects nothing is treated as a bug.
 
-## Developing with no API key
+## ✨ Features
 
-Set `STUDYSYNTH_LLM__BACKEND=mock` and every Claude call is replayed from
-`fixtures/llm/*.json`, with embeddings from a deterministic local backend. The
-whole pipeline runs offline, which is what the test suite uses.
+- **Three ranked sources** — the slides are authoritative because the professor sets
+  the exam; your notes add intuition and worked reasoning; the textbook is a gap
+  filler that never sets scope.
+- **Disagreements surfaced, not corrected** — where your notes and the slides conflict
+  on a fact, both appear inline under a **Check this:** marker. You need to see what
+  you misunderstood.
+- **Seven anti-bloat controls** — the product, described below.
+- **Human review interrupt** — the graph stops after OCR so you can fix the
+  transcription beside your own photo, because handwriting is the least reliable
+  thing the system reads.
+- **Crash-resumable runs** — a SQLite checkpointer means a failed run resumes at the
+  node that failed instead of re-transcribing everything.
+- **The textbook is embedded once** — parsed, chunked and written to an on-disk vector
+  index per course. Later runs query that index rather than re-embedding the book.
+- **Full run history** — replacing your notes deletes the old images so a run never
+  mixes two versions of a page, but every document you ever built stays downloadable.
+- **Provenance on every passage** — a toggle colours the document by source, and a
+  report lists exactly what the textbook gate rejected and why.
+- **Prompts are files, not code** — every prompt is a `.md` you can edit without
+  reading Python.
+- **Runs offline for development** — a mock backend replays recorded fixtures, so the
+  whole pipeline and all 37 tests run with no API key and no cost.
 
-## The textbook gate
+## 🚧 The textbook gate
 
-Spec section 7. The textbook is a reference work written to be read over a term;
-the study document is read the night before an exam. Seven mechanisms stand
-between them, and a run where nothing is rejected is a bug report:
+Spec section 7. Each mechanism rejects, and each rejection is logged.
 
 | | Mechanism | Rejects |
 |---|---|---|
-| 7.1 | Gap-triggered querying | Speculative retrieval. There is no code path that queries the textbook without a gap. |
-| 7.2 | Chapter scoping | Off-syllabus chapters, filtered in the index before the vector search. |
+| 7.1 | Gap-triggered querying | Speculative retrieval. No code path queries the textbook without a detected gap. |
+| 7.2 | Chapter scoping | Off-syllabus chapters, filtered inside the index before the vector search. |
 | 7.3 | Relevance grading | Topical near-misses that share vocabulary but answer nothing. |
-| 7.4 | Necessity grading | Correct, relevant prose you already have from the slides. |
+| 7.4 | Necessity grading | Correct, relevant prose you already have from the slides. The largest bloat source. |
 | 7.5 | Novelty filter | The textbook restating a slide at ten times the length. |
-| 7.6 | New-concept guard | Anything that would make you think a new topic is examinable. |
-| 7.7 | Budget enforcement | Everything else, once the chapter's token ceiling is reached. |
+| 7.6 | New-concept guard | Anything that would make you believe a new topic is examinable. |
+| 7.7 | Budget enforcement | Everything left, once the chapter's token ceiling is reached. |
 
-Every rejection is logged with the mechanism, a reason code and the score, and
-surfaces in the provenance report. From the demo run:
+Every threshold lives in one file, `config.py`. Changing the textbook budget is one
+line in one place.
 
-    Textbook tokens admitted: 55 of a 106 budget.
-    Passages admitted: 1. Rejected: 5.
+## 🏗️ Architecture
 
-    | Mechanism               | Rejected |
-    |-------------------------|----------|
-    | 7.3 relevance grading   | 1        |
-    | 7.4 necessity grading   | 1        |
-    | 7.5 novelty filter      | 1        |
-    | 7.6 new-concept guard   | 1        |
-    | 7.7 budget enforcement  | 1        |
+```
+Slides (PDF/PPTX)          Note photos            Textbook (PDF, optional)
+      │                         │                          │
+      ▼                         ▼                          ▼
+ page extraction          vision OCR              outline → chapters
+      │                (cached by content hash)   structural chunking
+      │                         │                 parent/child split
+      └────────────┬────────────┘                          │
+                   ▼                                       ▼
+          ══ REVIEW INTERRUPT ══                 Qdrant (on disk, once per course)
+        you correct the transcript                         │
+                   │                                       │
+                   ▼                                       │
+          concept extraction                               │
+                   │                                       │
+                   ▼                                       │
+             gap detection ─────── the only thing that ────┘
+                   │               may query the textbook
+                   ▼                                       │
+          drafting from A + B                              ▼
+                   │                          ┌── 7.1 gap-triggered
+                   │                          │   7.2 chapter scoping
+                   ▼                          │   7.3 relevance
+          the textbook gate ◀─────────────────┤   7.4 necessity
+                   │                          │   7.5 novelty
+                   │  admitted passages       │   7.6 new-concept guard
+                   ▼  + rejection log         └── 7.7 budget
+             synthesis  ⇄  verify (bounded loop)
+                   │
+                   ▼
+      Study document  (Markdown + provenance tags, kept in run history)
+```
 
-Every threshold lives in `studysynth/config.py`. Changing the textbook budget is
-one line in one file.
-
-## Layout
-
-    studysynth/
-      config.py       every tunable threshold, one place
-      models.py       domain types, no logic
-      store.py        SQLite metadata, disk layout, Qdrant collections
-      llm.py          Claude client, vision OCR, structured output, mock mode
-      embeddings.py   embedding backend behind one interface
-      ingest.py       textbook chunking, slide extraction, note preprocessing
-      retrieval.py    the seven anti-bloat mechanisms
-      graph.py        LangGraph nodes, checkpointer, review interrupt, verify loop
-      render.py       Markdown to HTML/PDF, provenance tags, reports
-      evaluate.py     offline eval
-      services.py     everything the interface calls, wired once
-      ui.py           the whole interface: home, course, lecture
-      prompts/        every prompt, as Markdown, never inlined in Python
-    tests/
-
+Eight LangGraph nodes. Slides and notes ingest in parallel, then fan in.
 Dependencies run one way and never back up:
 
-    config → models → {store, llm, embeddings} → {ingest, retrieval} → graph → services → ui
+```
+config → models → {store, llm, embeddings} → {ingest, retrieval} → graph → services → ui
+```
 
-## Checks
+## 🛠️ Tech Stack
 
-    pytest              # 37 tests: the seven controls, a full mock run, persistence
-    mypy --strict       # clean across 14 source files
+**Core:** Python 3.12 · Pydantic v2 · `mypy --strict`
+**Orchestration:** LangGraph with a SQLite checkpointer and a human-review interrupt
+**LLM:** Claude Opus 5 — vision OCR, concept and gap extraction, grading, synthesis
+**Embeddings:** Qwen3-Embedding-0.6B, run locally (4B and 8B drop in via config)
+**Vector DB:** Qdrant, on disk, one collection per course, payload indexes on chapter
+**Storage:** SQLite catalogue · per-course file store · Markdown documents per run
+**Interface:** Streamlit — three screens, one file, no build step
 
-## Real mode
+## 🚀 Getting Started
 
-Uncomment the Claude and Qwen settings in `.env`. The API key is read when a
-call is made, never at import, so nothing about the mock path depends on it.
+```bash
+# 1. Clone
+git clone https://github.com/<your-username>/studysynth.git
+cd studysynth
 
-    docker compose up          # qdrant + api
+# 2. Install
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[claude,qwen,dev]"
 
-Payload indexes have no effect in Qdrant's in-memory mode, so chapter scoping
-(7.2) should be exercised against the container before you trust it.
+# 3. Configure — copy the example and paste your key
+cp .env.example .env
+# ANTHROPIC_API_KEY=...                    # the only key needed
+# STUDYSYNTH_LLM__BACKEND=claude
+# STUDYSYNTH_EMBEDDINGS__BACKEND=qwen      # embeddings run locally, no key
 
-## Interface
+# 4. Run
+python -m studysynth ui
+```
 
-    python -m studysynth ui
+Open **http://localhost:8501**. Create a course, upload a textbook once, add a
+lecture, upload your slides and note photos, and build.
 
-Three screens, one file, no build step.
+```bash
+# Develop with no API key and no cost — replays recorded fixtures
+STUDYSYNTH_LLM__BACKEND=mock STUDYSYNTH_EMBEDDINGS__BACKEND=mock python -m studysynth ui
 
-**Home** is a grid of course boxes. Click one to open it, or create a course.
+# Checks
+pytest              # 37 tests: the seven controls, a full mock run, persistence
+mypy --strict       # clean across 14 modules
 
-**Course** holds the textbook and the lectures. The textbook is optional and
-indexed **once**: parsed, chunked, embedded and written to an on-disk Qdrant
-collection under `data/qdrant`. Every later run queries that index instead of
-re-embedding the book. Detected chapter page ranges are editable, because a
-wrong range silently narrows what the textbook may be searched for.
+# Evaluate a finished document against a labelled chapter
+python -m studysynth.evaluate --labels labels.json --document out.md
+```
 
-**Lecture** is one folder per lecture: upload the professor's PDF and photos of
-your handwritten notes, build the document, and read the history. Replacing the
-notes deletes the previous images so a run never mixes two versions of a page,
-but **every past run is kept** and downloadable from the history list.
+## 📂 Repository Structure
 
-Streamlit calls the pipeline in process. There is no second server, no HTTP hop
-and no build step.
+```
+studysynth/
+├── studysynth/
+│   ├── __main__.py          # Entry point — launches the interface
+│   ├── config.py            # Every tunable threshold. One place.
+│   ├── models.py            # Domain types. No logic.
+│   ├── store.py             # SQLite catalogue · disk layout · Qdrant collections
+│   ├── llm.py               # Claude client, vision OCR, structured output, mock mode
+│   ├── embeddings.py        # Embedding backend behind one swappable interface
+│   ├── ingest.py            # Textbook chunking · slide extraction · note OCR
+│   ├── retrieval.py         # The seven anti-bloat mechanisms
+│   ├── graph.py             # LangGraph nodes, checkpointer, interrupt, verify loop
+│   ├── render.py            # Markdown → HTML/PDF, provenance tags, reports
+│   ├── services.py          # Everything the interface calls, wired once
+│   ├── ui.py                # The whole interface: home · course · lecture
+│   ├── evaluate.py          # Offline eval: coverage, bloat rate, citation validity
+│   └── prompts/             # Every prompt as Markdown. Never inlined in Python.
+├── fixtures/llm/            # Recorded responses, so tests run offline and free
+├── tests/                   # 37 tests
+├── study-synthesizer-spec.md  # Source of truth for behaviour
+└── docker-compose.yml       # Optional: Qdrant as a server instead of on disk
+```
 
-## Known limits
+Everything you upload and everything it produces lives under `data/` — the SQLite
+catalogue, the vector index, your files, and one folder per run holding its document
+and provenance report. `data/` is gitignored, so your notes and your key never reach
+GitHub.
 
-- `MockEmbeddings` is lexical, not semantic. It gives real cosine geometry for
-  tests, but the 7.5 similarity threshold must be re-tuned against Qwen before
-  those numbers mean anything.
-- Textbook chunking splits on Markdown headings. `pypdf` returns plain text, so
-  a layout-aware parser is needed for structural chunking to work on a real
-  textbook.
-- Diagram-only slides need page images beside the deck; without them the vision
-  pass is skipped rather than guessed at.
+## 🗺️ Roadmap
+
+- [ ] Parallelise the grading calls — they are independent per candidate and currently
+      run one after another, which dominates wall-clock time
+- [ ] Prompt caching on the graders, where the drafted chapter is identical across
+      every candidate in a run
+- [ ] A cheap vector-score floor before the LLM relevance grader, to cut call count
+- [ ] Wire the PDF export to a download button
+- [ ] A layout-aware parser, so structural chunking sees real headings instead of
+      the flat text `pypdf` returns
+- [ ] Re-tune the novelty threshold against Qwen rather than the lexical mock
+- [ ] Build a labelled chapter and publish the eval numbers
+
+## 📫 Contact
+
+Built by Ziyad Salous — ziyadsalous00@gmail.com
