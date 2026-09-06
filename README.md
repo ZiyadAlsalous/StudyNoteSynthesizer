@@ -162,7 +162,7 @@ studysynth/
 │   │   ├── llm.py           #   Claude: vision OCR, structured output, mock mode
 │   │   └── embeddings.py    #   Qwen locally, swappable by config
 │   ├── pipeline/            # The work itself
-│   │   ├── ingest.py        #   Textbook chunking · slides · handwriting OCR
+│   │   ├── ingest.py        #   Textbook chunking · slides · notes to images · OCR
 │   │   ├── retrieval.py     #   The seven anti-bloat mechanisms
 │   │   ├── graph.py         #   LangGraph nodes, checkpointer, review interrupt
 │   │   └── render.py        #   Markdown → HTML/PDF, provenance tags

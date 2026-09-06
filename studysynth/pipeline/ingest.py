@@ -26,6 +26,7 @@ _TABLE_ROW = re.compile(r"^\s*\|", re.MULTILINE)
 # `4 Divide-and-Conquer` but not `4.1 Multiplying matrices`.
 _CHAPTER_NUMBER = re.compile(r"^\d+\s+\S")
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 _FORMULA_FENCE = re.compile(r"\$\$")
 
 
@@ -304,18 +305,15 @@ class NoteIngestor:
     """Handwriting to Markdown, cached by content hash."""
 
     def __init__(self, settings: Settings, client: LlmClient, places: Places) -> None:
+        self._settings = settings
         self._client = client
         self._places = places
         self._prompts = PromptLibrary(settings.prompts_dir)
 
     def ingest(self, source: Path) -> list[NotePage]:
-        images = sorted(
-            path
-            for path in (source.iterdir() if source.is_dir() else [source])
-            if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
-        )
+        images = self._images(source)
         if not images:
-            raise IngestError(f"No note images found at {source}")
+            raise IngestError(f"No note pages found at {source}")
         prompt = self._prompts.render("ocr_notes")
         pages: list[NotePage] = []
         for number, image in enumerate(images, start=1):
@@ -335,3 +333,32 @@ class NoteIngestor:
                 )
             )
         return pages
+
+    def _images(self, source: Path) -> list[Path]:
+        """Notes arrive as a scanned PDF or as one photo per page."""
+        candidates = sorted(source.iterdir()) if source.is_dir() else [source]
+        images: list[Path] = []
+        for path in candidates:
+            suffix = path.suffix.lower()
+            if suffix == ".pdf":
+                images.extend(self.rasterise(path, path.parent / "pages"))
+            elif suffix in IMAGE_SUFFIXES:
+                images.append(path)
+        return images
+
+    def rasterise(self, pdf: Path, target: Path) -> list[Path]:
+        """A vision model needs pixels, so each PDF page is rendered to a PNG."""
+        import pymupdf
+
+        target.mkdir(parents=True, exist_ok=True)
+        zoom = self._settings.notes.render_dpi / 72.0
+        matrix = pymupdf.Matrix(zoom, zoom)  # type: ignore[no-untyped-call]
+        rendered: list[Path] = []
+        with pymupdf.open(str(pdf)) as document:  # type: ignore[no-untyped-call]
+            for number, page in enumerate(document, start=1):
+                out = target / f"page{number:03d}.png"
+                # Re-rendering an unchanged page is wasted work and wasted battery.
+                if not out.exists():
+                    page.get_pixmap(matrix=matrix).save(str(out))
+                rendered.append(out)
+        return rendered

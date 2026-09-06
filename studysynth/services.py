@@ -21,7 +21,7 @@ from .pipeline.render import provenance_report
 from .pipeline.retrieval import TextbookGate
 from .store import Catalogue, Places, VectorStore
 
-NOTE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+NOTE_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
 SLIDE_SUFFIXES = {".pdf", ".pptx"}
 
 
@@ -142,12 +142,31 @@ class Library:
         for position, (name, data) in enumerate(uploads, start=1):
             suffix = Path(name).suffix.lower()
             if suffix not in NOTE_SUFFIXES:
-                raise ServiceError(f"{name} is not an image; notes must be photos")
-            (folder / f"page{position:03d}{suffix}").write_bytes(data)
+                raise ServiceError(f"{name} must be a PDF or an image")
+            # A scanned PDF holds every page, so it keeps its own name.
+            stem = Path(name).stem if suffix == ".pdf" else f"page{position:03d}"
+            (folder / f"{stem}{suffix}").write_bytes(data)
+        return self._count_pages(course, lecture_id, folder)
+
+    def _count_pages(self, course: str, lecture_id: str, folder: Path) -> int:
+        """A PDF counts as its page count, not as one file."""
+        import pymupdf
+
+        pages = 0
+        for path in folder.iterdir():
+            if path.suffix.lower() == ".pdf":
+                try:
+                    with pymupdf.open(str(path)) as document:  # type: ignore[no-untyped-call]
+                        pages += document.page_count
+                except Exception as error:
+                    path.unlink(missing_ok=True)
+                    raise ServiceError(f"{path.name} could not be read as a PDF") from error
+            elif path.suffix.lower() in NOTE_SUFFIXES:
+                pages += 1
         self.catalogue.set_lecture_sources(
-            course, lecture_id, slides_name=None, note_count=len(uploads)
+            course, lecture_id, slides_name=None, note_count=pages
         )
-        return len(uploads)
+        return pages
 
     # runs -------------------------------------------------------------------
 

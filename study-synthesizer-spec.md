@@ -60,7 +60,8 @@ citation. pypdf for PDF, python-pptx for PPTX including speaker notes. Pages tha
 are diagram-only get a vision pass describing what the diagram shows, appended as
 text to that page's chunk.
 
-**Notes.** One image per page. Deskew, contrast-normalize, then a vision OCR pass
+**Notes.** A scanned PDF, rendered to one image per page, or one image per page
+directly. Deskew, contrast-normalize, then a vision OCR pass
 to Markdown. Cache by content hash so a re-run never re-transcribes an unchanged
 page. The OCR transcript is editable by the student at the review interrupt
 (Section 8) because OCR on handwriting is the least reliable step in the system.

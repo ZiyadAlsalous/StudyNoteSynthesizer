@@ -241,9 +241,9 @@ def uploads_section(shelf: Library, course: str, lecture: Lecture) -> None:
         st.markdown("**Your handwritten notes**")
         if lecture.note_count:
             st.success(f"{lecture.note_count} pages saved")
-        st.caption("Photos, one per page. Replacing them removes the old ones.")
+        st.caption("A scanned PDF, or photos one per page. Replacing them removes the old ones.")
         photos = st.file_uploader(
-            "Notes", type=["png", "jpg", "jpeg", "webp"], accept_multiple_files=True,
+            "Notes", type=["pdf", "png", "jpg", "jpeg", "webp"], accept_multiple_files=True,
             key=f"notes-{lecture.id}", label_visibility="collapsed",
         )
         if photos and st.button("Save notes", key=f"save-notes-{lecture.id}"):

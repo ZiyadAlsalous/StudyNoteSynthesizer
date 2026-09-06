@@ -275,10 +275,37 @@ def test_replacing_notes_removes_the_previous_pages(shelf, tmp_path):
     assert shelf.catalogue.lecture("cs3340", "week-3").note_count == 1
 
 
-def test_notes_must_be_images(shelf):
+def test_notes_may_be_a_scanned_pdf(shelf, tmp_path):
+    """Students scan a notebook rather than photographing every page."""
     shelf.add_lecture("cs3340", "Week 3", "induction")
-    with pytest.raises(ServiceError, match="not an image"):
-        shelf.replace_notes("cs3340", "week-3", [("notes.pdf", b"%PDF")])
+    pdf = write_pdf(tmp_path / "notes.pdf", [["page one"], ["page two"], ["page three"]])
+    assert shelf.replace_notes("cs3340", "week-3", [("notes.pdf", pdf.read_bytes())]) == 3
+    assert shelf.catalogue.lecture("cs3340", "week-3").note_count == 3
+
+
+def test_notes_reject_anything_that_is_not_a_pdf_or_an_image(shelf):
+    shelf.add_lecture("cs3340", "Week 3", "induction")
+    with pytest.raises(ServiceError, match="must be a PDF or an image"):
+        shelf.replace_notes("cs3340", "week-3", [("notes.docx", b"PK")])
+
+
+def test_an_unreadable_pdf_gives_a_clear_error(shelf):
+    """A raw PyMuPDF stack trace tells a student nothing."""
+    shelf.add_lecture("cs3340", "Week 3", "induction")
+    with pytest.raises(ServiceError, match="could not be read as a PDF"):
+        shelf.replace_notes("cs3340", "week-3", [("notes.pdf", b"not really a pdf")])
+
+
+def test_a_notes_pdf_rasterises_one_image_per_page(shelf, tmp_path):
+    from studysynth.pipeline.ingest import NoteIngestor
+
+    shelf.add_lecture("cs3340", "Week 3", "induction")
+    pdf = write_pdf(tmp_path / "notes.pdf", [["one"], ["two"], ["three"], ["four"]])
+    shelf.replace_notes("cs3340", "week-3", [("notes.pdf", pdf.read_bytes())])
+    folder = shelf.places.notes_dir("cs3340", "week-3")
+    images = NoteIngestor(shelf.settings, shelf.llm, shelf.places)._images(folder)
+    assert len(images) == 4
+    assert all(p.suffix == ".png" and p.stat().st_size > 0 for p in images)
 
 
 def test_a_lecture_is_not_runnable_until_both_sources_exist(shelf, tmp_path):

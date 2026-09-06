@@ -67,6 +67,11 @@ class QdrantSettings(BaseModel):
     payload_indexes: tuple[str, ...] = ("chapter", "section_path", "page_start")
 
 
+class NoteSettings(BaseModel):
+    # Handwriting needs the detail; 200 dpi is legible without huge payloads.
+    render_dpi: int = 200
+
+
 class ChunkSettings(BaseModel):
     child_tokens: int = 320
     child_overlap: int = 48
@@ -116,6 +121,7 @@ class Settings(BaseSettings):
     embeddings: EmbeddingSettings = EmbeddingSettings()
     qdrant: QdrantSettings = QdrantSettings()
     chunks: ChunkSettings = ChunkSettings()
+    notes: NoteSettings = NoteSettings()
     retrieval: RetrievalSettings = RetrievalSettings()
     verify: VerifySettings = VerifySettings()
     server: ServerSettings = ServerSettings()
