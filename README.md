@@ -74,7 +74,7 @@ one line in one file.
       worker.py       background job runner and service wiring
       evaluate.py     offline eval
       prompts/        every prompt, as Markdown, never inlined in Python
-    web/              React + Vite + TypeScript + Tailwind, four screens
+    web/              React + Vite + TypeScript + Tailwind, one page
     tests/
 
 Dependencies run one way and never back up:
@@ -100,9 +100,16 @@ Payload indexes have no effect in Qdrant's in-memory mode, so chapter scoping
 
     cd web && npm install && npm run dev
 
-Four screens: courses and chapter ranges, chapter run with live progress, the
-review interrupt with an editable transcript beside the source image, and the
-library with provenance highlighting and the rejection report.
+One page, no tabs. A sidebar holds setup (course, textbook, chapter ranges,
+source folders) and collapses to a label once a run starts. The main panel
+follows the run's own state: a progress line, then the editable transcript
+beside the source image at the review interrupt, then the finished document with
+provenance highlighting and the rejection report.
+
+Nothing in the page re-fetches what it already has. Progress arrives over SSE
+rather than polling, the document is fetched once and provenance highlighting is
+a CSS class rather than a round trip, and moving between the three moments of a
+run is a state change rather than a page load.
 
 ## Known limits
 

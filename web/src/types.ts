@@ -34,5 +34,3 @@ export type NotePage = {
   markdown: string;
   edited_by_student: boolean;
 };
-
-export type Screen = "courses" | "run" | "review" | "library";
