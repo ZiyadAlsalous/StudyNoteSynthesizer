@@ -167,7 +167,8 @@ class TextbookGate:
                 },
             )
             verdict = self._llm.structured(
-                prompt, RelevanceVerdict, job="grade_relevance", key=candidate.parent_id
+                prompt, RelevanceVerdict, job="grade_relevance", key=candidate.parent_id,
+                effort=self._settings.llm.grading_effort,
             )
             graded = candidate.model_copy(update={"relevance": verdict.score})
             if verdict.score >= self._config.min_relevance:
@@ -207,7 +208,8 @@ class TextbookGate:
                 },
             )
             verdict = self._llm.structured(
-                prompt, NecessityVerdict, job="grade_necessity", key=candidate.parent_id
+                prompt, NecessityVerdict, job="grade_necessity", key=candidate.parent_id,
+                effort=self._settings.llm.grading_effort,
             )
             graded = candidate.model_copy(update={"necessity": verdict.score})
             if verdict.score >= self._config.min_necessity:
@@ -272,7 +274,8 @@ class TextbookGate:
                 "new_concept_guard", {"concept_names": names, "passage": candidate.text}
             )
             verdict = self._llm.structured(
-                prompt, NewConceptVerdict, job="new_concept_guard", key=candidate.parent_id
+                prompt, NewConceptVerdict, job="new_concept_guard", key=candidate.parent_id,
+                effort=self._settings.llm.grading_effort,
             )
             if not verdict.terms:
                 kept.append(candidate)

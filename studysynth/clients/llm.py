@@ -51,10 +51,13 @@ class LlmClient(ABC):
     """The two calls the pipeline makes: free text, and a validated object."""
 
     @abstractmethod
-    def complete(self, prompt: str, *, job: str) -> str: ...
+    def complete(self, prompt: str, *, job: str, effort: str | None = None) -> str: ...
 
     @abstractmethod
-    def structured(self, prompt: str, schema: type[Model], *, job: str, key: str = "") -> Model: ...
+    def structured(
+        self, prompt: str, schema: type[Model], *, job: str, key: str = "",
+        effort: str | None = None,
+    ) -> Model: ...
 
     @abstractmethod
     def vision(self, prompt: str, image: Path, *, job: str) -> str: ...
@@ -87,12 +90,15 @@ class MockLlm(LlmClient):
             raise FixtureMissing(f"Fixture '{job}' has no entry for key '{key}' and no default")
         return fixture["default"]
 
-    def complete(self, prompt: str, *, job: str) -> str:
+    def complete(self, prompt: str, *, job: str, effort: str | None = None) -> str:
         self.calls.append((job, prompt[:80]))
         value = self._lookup(job, "")
         return value if isinstance(value, str) else json.dumps(value)
 
-    def structured(self, prompt: str, schema: type[Model], *, job: str, key: str = "") -> Model:
+    def structured(
+        self, prompt: str, schema: type[Model], *, job: str, key: str = "",
+        effort: str | None = None,
+    ) -> Model:
         self.calls.append((job, key))
         payload = self._lookup(job, key)
         try:
@@ -129,11 +135,11 @@ class ClaudeLlm(LlmClient):
                 ) from error
         return self._client
 
-    def _message(self, content: list[dict[str, Any]], model: str) -> str:
+    def _message(self, content: list[dict[str, Any]], model: str, effort: str | None) -> str:
         response = self._anthropic().messages.create(
             model=model,
             max_tokens=self._settings.llm.max_output_tokens,
-            temperature=self._settings.llm.temperature,
+            output_config={"effort": effort or self._settings.llm.effort},
             messages=[{"role": "user", "content": content}],
         )
         parts = [block.text for block in response.content if block.type == "text"]
@@ -141,15 +147,22 @@ class ClaudeLlm(LlmClient):
             raise LlmError("Claude returned no text content")
         return "".join(parts)
 
-    def complete(self, prompt: str, *, job: str) -> str:
-        return self._message([{"type": "text", "text": prompt}], self._settings.llm.model)
+    def complete(self, prompt: str, *, job: str, effort: str | None = None) -> str:
+        return self._message(
+            [{"type": "text", "text": prompt}], self._settings.llm.model, effort
+        )
 
-    def structured(self, prompt: str, schema: type[Model], *, job: str, key: str = "") -> Model:
+    def structured(
+        self, prompt: str, schema: type[Model], *, job: str, key: str = "",
+        effort: str | None = None,
+    ) -> Model:
         instruction = (
             f"{prompt}\n\nReturn only JSON matching this schema:\n"
             f"{json.dumps(schema.model_json_schema())}"
         )
-        raw = self._message([{"type": "text", "text": instruction}], self._settings.llm.model)
+        raw = self._message(
+            [{"type": "text", "text": instruction}], self._settings.llm.model, effort
+        )
         try:
             return schema.model_validate_json(_strip_fence(raw))
         except ValidationError as error:
@@ -169,7 +182,7 @@ class ClaudeLlm(LlmClient):
             },
             {"type": "text", "text": prompt},
         ]
-        return self._message(content, self._settings.llm.vision_model)
+        return self._message(content, self._settings.llm.vision_model, None)
 
 
 def _strip_fence(text: str) -> str:

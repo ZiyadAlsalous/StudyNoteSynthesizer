@@ -41,7 +41,11 @@ class LlmSettings(BaseModel):
     model: str = "claude-sonnet-5"
     vision_model: str = "claude-sonnet-5"
     max_output_tokens: int = 8000
-    temperature: float = 0.0
+    # Sampling parameters were removed on Opus 5; effort replaces them.
+    effort: str = "high"
+    # Grading is a small judgement returning one number, so it does not need
+    # the depth that drafting and synthesis do.
+    grading_effort: str = "low"
     max_attempts: int = 3
     fixtures: Path = Path("fixtures/llm")
 

@@ -22,11 +22,14 @@ class StubLlm(LlmClient):
         self.verdicts = verdicts or {}
         self.jobs: list[tuple[str, str]] = []
 
-    def complete(self, prompt: str, *, job: str) -> str:
+    def complete(self, prompt: str, *, job: str, effort: str | None = None) -> str:
         self.jobs.append((job, ""))
         return self.verdicts.get(job, {}).get("text", "")
 
-    def structured(self, prompt: str, schema: type[Model], *, job: str, key: str = "") -> Model:
+    def structured(
+        self, prompt: str, schema: type[Model], *, job: str, key: str = "",
+        effort: str | None = None,
+    ) -> Model:
         self.jobs.append((job, key))
         payload = self.verdicts.get(job, {}).get(key)
         if payload is None:
