@@ -1,0 +1,12 @@
+{
+  "default": {
+    "score": 0.88,
+    "reason": "addresses the gap"
+  },
+  "by_key": {
+    "cs3340:induction:unrelated-graph-traversal:0": {
+      "score": 0.21,
+      "reason": "shares vocabulary, answers a different question"
+    }
+  }
+}

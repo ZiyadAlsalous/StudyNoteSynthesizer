@@ -1,0 +1,20 @@
+{
+  "default": {
+    "gaps": [
+      {
+        "id": "gap-1",
+        "concept_id": "concept-1",
+        "kind": "unsupported",
+        "question": "Why does the inductive step need no separate base case for each residue class?",
+        "query": "inductive step base case strong induction proof obligation"
+      },
+      {
+        "id": "gap-2",
+        "concept_id": "concept-2",
+        "kind": "undefined",
+        "question": "What exactly is a loop invariant and when must it hold?",
+        "query": "loop invariant initialization maintenance termination"
+      }
+    ]
+  }
+}

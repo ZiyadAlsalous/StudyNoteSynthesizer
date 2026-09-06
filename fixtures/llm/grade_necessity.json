@@ -1,0 +1,12 @@
+{
+  "default": {
+    "score": 0.86,
+    "reason": "supplies what the slides omit"
+  },
+  "by_key": {
+    "cs3340:induction:recurrence-relations-in-detail:0": {
+      "score": 0.31,
+      "reason": "the drafted slide section already resolves this"
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "default": {
+    "concepts": [
+      {
+        "id": "concept-1",
+        "name": "Strong induction",
+        "slide_pages": [
+          1,
+          2
+        ],
+        "slide_definition": "Assume P(k) for all k < n, then prove P(n).",
+        "covered_by_notes": true,
+        "note_pages": [
+          1
+        ]
+      },
+      {
+        "id": "concept-2",
+        "name": "Loop invariant",
+        "slide_pages": [
+          3
+        ],
+        "slide_definition": "",
+        "covered_by_notes": false,
+        "note_pages": [
+          2
+        ]
+      }
+    ]
+  }
+}
