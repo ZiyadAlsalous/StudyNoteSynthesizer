@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Any, Iterator, cast
 
 from langchain_core.runnables import RunnableConfig
@@ -19,6 +20,7 @@ from ..models import (
     DraftedConcept,
     Gap,
     GraphState,
+    NotePage,
     RetrievalOutcome,
     Source,
 )
@@ -84,7 +86,7 @@ class Nodes:
             {
                 "chapter": state["chapter"],
                 "slides": _join(page.markdown for page in state.get("slides", [])),
-                "notes": _join(page.markdown for page in state.get("notes", [])),
+                "notes": _join(page.markdown for page in note_pages(state)),
             },
         )
         found = self._llm.structured(prompt, ConceptList, job="extract_concepts")
@@ -110,7 +112,7 @@ class Nodes:
     def draft_concepts(self, state: GraphState) -> dict[str, Any]:
         """Drafted from slides and notes only."""
         slides = {page.page: page.markdown for page in state.get("slides", [])}
-        notes = _join(page.markdown for page in state.get("notes", []))
+        notes = _join(page.markdown for page in note_pages(state))
         drafts: list[DraftedConcept] = []
         for concept in state.get("concepts", []):
             prompt = self._prompts.render(
@@ -195,6 +197,14 @@ class Nodes:
         }
 
 
+def note_pages(state: GraphState) -> list[NotePage]:
+    """Notes come back from a checkpoint as dicts, and edited ones go in as dicts."""
+    return [
+        page if isinstance(page, NotePage) else NotePage.model_validate(page)
+        for page in state.get("notes", [])
+    ]
+
+
 def _join(parts: Any) -> str:
     return "\n\n".join(part for part in parts if part)
 
@@ -263,13 +273,20 @@ class Runner:
             config: RunnableConfig = {"configurable": {"thread_id": run_id}}
             return tuple(app.get_state(config).next)
 
-    def approve_notes(self, run_id: str, edited: list[dict[str, Any]] | None = None) -> None:
+    def approve_notes(
+        self, run_id: str, edited: Sequence[NotePage | dict[str, Any]] | None = None
+    ) -> None:
         """Resume past the review interrupt, optionally with corrected OCR."""
         with self._saver() as saver:
             app = self._graph().compile(checkpointer=saver, interrupt_before=[EXTRACT_CONCEPTS])
             config: RunnableConfig = {"configurable": {"thread_id": run_id}}
             update: dict[str, Any] = {"notes_approved": True}
             if edited is not None:
-                update["notes"] = edited
+                # Store typed objects so every reader after the interrupt gets
+                # the same thing the ingest node produced.
+                update["notes"] = [
+                    page if isinstance(page, NotePage) else NotePage.model_validate(page)
+                    for page in edited
+                ]
             # as_node is required: slides and notes ingest in parallel, so LangGraph cannot inf.
             app.update_state(config, update, as_node=INGEST_NOTES)

@@ -362,3 +362,26 @@ def test_deleting_a_lecture_keeps_its_finished_documents(shelf, tmp_path):
     shelf.delete_lecture("cs3340", "week-3")
     assert not shelf.places.lecture("cs3340", "week-3").exists()
     assert shelf.catalogue.run("r1").document_path == "/tmp/one.md"
+
+
+def test_notes_survive_the_review_interrupt_as_objects(project):
+    """The edited transcript goes back into the graph as plain dicts, and every
+    reader after the interrupt expects NotePage. Regression for a crash that hit
+    the review screen and both downstream nodes."""
+    runner, catalogue = project["runner"], project["catalogue"]
+    catalogue.start_run("run-notes", "cs3340", "induction")
+    list(runner.stream(
+        "run-notes", course="cs3340", chapter="induction",
+        slides_dir=str(project["slides_dir"]), notes_dir=str(project["notes_dir"]),
+    ))
+
+    edited = [p.model_copy(update={"markdown": "corrected"}).model_dump()
+              for p in runner.state("run-notes")["notes"]]
+    runner.approve_notes("run-notes", edited)
+
+    pages = runner.state("run-notes")["notes"]
+    assert all(hasattr(p, "page") for p in pages), "notes came back as dicts"
+    assert pages[0].markdown == "corrected"
+
+    list(runner.stream("run-notes"))
+    assert runner.state("run-notes")["document"]

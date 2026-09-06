@@ -13,10 +13,10 @@ from .clients import embeddings as embedding_backends
 from .clients import llm as llm_backends
 from .config import Settings
 from .clients.embeddings import EmbeddingBackend
-from .pipeline.graph import EXTRACT_CONCEPTS, Nodes, Runner
+from .pipeline.graph import EXTRACT_CONCEPTS, Nodes, Runner, note_pages
 from .pipeline.ingest import OutlineMissing, TextbookIngestor, chapter_ranges
 from .clients.llm import LlmClient
-from .models import ChapterRange, Lecture, RetrievalOutcome, RunRecord
+from .models import ChapterRange, Lecture, NotePage, RetrievalOutcome, RunRecord
 from .pipeline.render import provenance_report
 from .pipeline.retrieval import TextbookGate
 from .store import Catalogue, Places, VectorStore
@@ -186,9 +186,15 @@ class Library:
         )
         return run_id, stream
 
-    def resume(self, run_id: str, notes: list[dict[str, Any]] | None) -> Iterator[tuple[str, Any]]:
+    def resume(
+        self, run_id: str, notes: Sequence[NotePage | dict[str, Any]] | None
+    ) -> Iterator[tuple[str, Any]]:
         self.runner.approve_notes(run_id, notes)
         return self.runner.stream(run_id)
+
+    def notes(self, run_id: str) -> list[NotePage]:
+        """The transcript the review screen edits, always as typed pages."""
+        return note_pages(self.runner.state(run_id))
 
     def awaiting_review(self, run_id: str) -> bool:
         return EXTRACT_CONCEPTS in self.runner.pending(run_id)

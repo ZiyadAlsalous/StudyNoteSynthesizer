@@ -360,7 +360,7 @@ def review(shelf: Library, run_id: str) -> None:
     st.subheader("Check the transcript")
     st.caption("Anything wrong here is wrong in the finished document.")
 
-    pages: list[NotePage] = list(shelf.runner.state(run_id).get("notes", []))
+    pages = shelf.notes(run_id)
     if not pages:
         st.warning("No transcript yet.")
         return
