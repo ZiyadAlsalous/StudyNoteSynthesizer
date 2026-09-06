@@ -21,7 +21,6 @@ dependencies = [
 [project.optional-dependencies]
 claude = ["anthropic>=0.30"]
 qwen = ["sentence-transformers>=3.0"]
-render = ["weasyprint>=62"]
 dev = ["pytest>=8.2", "mypy>=1.10", "ruff>=0.5"]
 
 [tool.pytest.ini_options]

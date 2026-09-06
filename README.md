@@ -109,7 +109,7 @@ config → models → {store, llm, embeddings} → {ingest, retrieval} → graph
 **Orchestration:** LangGraph with a SQLite checkpointer and a human-review interrupt
 **LLM:** Claude Opus 5 — vision OCR, concept and gap extraction, grading, synthesis
 **Embeddings:** Qwen3-Embedding-0.6B, run locally (4B and 8B drop in via config)
-**Vector DB:** Qdrant, on disk, one collection per course, payload indexes on chapter
+**Vector DB:** Qdrant, embedded and on disk, one collection per course
 **Storage:** SQLite catalogue · per-course file store · Markdown documents per run
 **Interface:** Streamlit — three screens, one file, no build step
 
@@ -175,8 +175,7 @@ studysynth/
 │   └── prompts/             # Every prompt as Markdown. Never inlined in Python.
 ├── fixtures/llm/            # Recorded responses, so tests run offline and free
 ├── tests/                   # 37 tests
-├── study-synthesizer-spec.md  # Source of truth for behaviour
-└── docker-compose.yml       # Optional: Qdrant as a server instead of on disk
+└── study-synthesizer-spec.md  # Source of truth for behaviour
 ```
 
 Everything you upload and everything it produces lives under `data/` — the SQLite
@@ -191,7 +190,6 @@ GitHub.
 - [ ] Prompt caching on the graders, where the drafted chapter is identical across
       every candidate in a run
 - [ ] A cheap vector-score floor before the LLM relevance grader, to cut call count
-- [ ] Wire the PDF export to a download button
 - [ ] A layout-aware parser, so structural chunking sees real headings instead of
       the flat text `pypdf` returns
 - [ ] Re-tune the novelty threshold against Qwen rather than the lexical mock

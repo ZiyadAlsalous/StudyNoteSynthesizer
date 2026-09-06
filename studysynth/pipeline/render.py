@@ -16,10 +16,6 @@ TEXTBOOK_TAG = re.compile(r"\[C: pages (\d+)-(\d+)\]")
 CHECK_THIS = re.compile(r"\*\*Check this:\*\*")
 
 
-class RenderError(RuntimeError):
-    pass
-
-
 PAGE_CSS = """
 @page { size: A4; margin: 22mm 18mm; @bottom-center { content: counter(page); } }
 body { font: 11pt/1.5 Georgia, serif; color: #1a1a1a; }
@@ -94,18 +90,6 @@ def to_html(markdown: str, *, title: str, highlight: bool = True) -> str:
     body = parser.render(tag_provenance(markdown))
     template = _environment().from_string(DOCUMENT_HTML)
     return template.render(title=html.escape(title), css=PAGE_CSS, body=body, highlight=highlight)
-
-
-def to_pdf(markdown: str, destination: Path, *, title: str, highlight: bool = True) -> Path:
-    try:
-        from weasyprint import HTML
-    except ImportError as error:
-        raise RenderError(
-            "PDF output needs weasyprint: pip install 'studysynth[render]'"
-        ) from error
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    HTML(string=to_html(markdown, title=title, highlight=highlight)).write_pdf(str(destination))
-    return destination
 
 
 def provenance_report(course: str, chapter: str, outcome: RetrievalOutcome) -> str:
