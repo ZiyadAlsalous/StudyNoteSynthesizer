@@ -57,7 +57,7 @@ def chapter_ranges(pdf: Path, level: int | None = None) -> list[ChapterRange]:
     for index, (own_depth, title, start) in enumerate(entries):
         if own_depth != depth:
             continue
-        # A chapter ends where the next entry at its level or shallower begins, never where its.
+        # A chapter ends at the next entry of its level, not at its own first subsection.
         end = total
         for later_depth, _, later_start in entries[index + 1 :]:
             if later_depth <= depth:
