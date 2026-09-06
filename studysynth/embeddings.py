@@ -92,7 +92,14 @@ class QwenEmbeddings(EmbeddingBackend):
 
     @property
     def dimensions(self) -> int:
-        return self._settings.dimensions
+        """Asked of the model, not the config.
+
+        Qdrant sizes its collection from this, and the Qwen3 variants differ
+        (0.6B is 1024, 4B is 2560, 8B is 4096). A stale config value here is a
+        vector-size mismatch at upsert time, long after the mistake was made.
+        """
+        reported = self._load().get_sentence_embedding_dimension()
+        return int(reported) if reported else self._settings.dimensions
 
     def _encode(self, texts: Sequence[str]) -> Vectors:
         encoded = self._load().encode(
