@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -121,6 +121,13 @@ class Settings(BaseSettings):
     server: ServerSettings = ServerSettings()
 
     prompts_dir: Path = Path(__file__).parent / "prompts"
+
+    # Read here rather than left to the SDK's own environment lookup: settings
+    # loaded from a .env file never reach os.environ, so a key placed there
+    # would otherwise be silently ignored.
+    anthropic_api_key: str | None = Field(
+        default=None, validation_alias=AliasChoices("ANTHROPIC_API_KEY")
+    )
 
     def validated(self) -> "Settings":
         if self.chunks.parent_tokens <= self.chunks.child_tokens:

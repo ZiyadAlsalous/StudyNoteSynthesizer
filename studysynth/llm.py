@@ -25,6 +25,10 @@ class LlmError(RuntimeError):
     """Raised when a completion cannot be produced or parsed."""
 
 
+class MissingCredentials(LlmError):
+    """No API key anywhere: not in .env, not exported, no CLI profile."""
+
+
 class FixtureMissing(LlmError):
     """The mock backend was asked for a prompt it has no recorded answer for."""
 
@@ -121,10 +125,20 @@ class ClaudeLlm(LlmClient):
         self._client: Any | None = None
 
     def _anthropic(self) -> Any:
+        """Built on first call, never at import."""
         if self._client is None:
             import anthropic
 
-            self._client = anthropic.Anthropic()
+            key = self._settings.anthropic_api_key
+            try:
+                # No key given falls through to the SDK's own resolution:
+                # an exported variable, or an `ant auth login` profile.
+                self._client = anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
+            except Exception as error:
+                raise MissingCredentials(
+                    "No Anthropic credentials found. Put ANTHROPIC_API_KEY in .env, "
+                    "export it, or run `ant auth login`."
+                ) from error
         return self._client
 
     def _message(self, content: list[dict[str, Any]], model: str) -> str:
