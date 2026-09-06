@@ -17,6 +17,7 @@ from studysynth.graph import EXTRACT_CONCEPTS, Nodes, Runner
 from studysynth.ingest import TextbookIngestor
 from studysynth.models import ChapterRange, Reason
 from studysynth.retrieval import TextbookGate
+from studysynth.services import ServiceError, build
 from studysynth.store import Catalogue, Places, VectorStore
 
 from .conftest import mock_settings
@@ -225,3 +226,96 @@ def test_a_run_resumes_from_the_node_that_failed(project, monkeypatch):
     list(runner.stream("run-4"))
     assert runner.state("run-4")["document"].startswith("# Induction")
     assert calls["n"] == 2
+
+
+# --- persistence and replacement -------------------------------------------
+
+
+@pytest.fixture
+def shelf(tmp_path):
+    settings = mock_settings(tmp_path)
+    settings.qdrant.backend = "memory"
+    library = build(settings)
+    library.add_course("cs3340", "Analysis of Algorithms")
+    return library
+
+
+def test_a_textbook_is_indexed_once_and_then_reused(shelf, tmp_path):
+    """The whole reason the index is persisted: embedding a book is slow, and
+    it must not happen again on every run."""
+    assert shelf.textbook_status("cs3340") is None
+
+    pdf = write_pdf(tmp_path / "book.pdf", TEXTBOOK)
+    chapters, chunks = shelf.index_textbook("cs3340", pdf, "book.pdf")
+    assert chapters >= 1 and chunks > 0
+
+    status = shelf.textbook_status("cs3340")
+    assert status is not None
+    assert status["filename"] == "book.pdf"
+    assert status["chunks"] == chunks
+    # Asking again reports the stored index rather than rebuilding it.
+    assert shelf.textbook_status("cs3340") == status
+
+
+def test_replacing_notes_removes_the_previous_pages(shelf, tmp_path):
+    """A student re-photographs their notes often. A run must never mix two
+    versions of the same page."""
+    shelf.add_lecture("cs3340", "Week 3", "induction")
+    first = [("a.png", write_png(tmp_path / "a.png", 1).read_bytes()),
+             ("b.png", write_png(tmp_path / "b.png", 2).read_bytes()),
+             ("c.png", write_png(tmp_path / "c.png", 3).read_bytes())]
+    assert shelf.replace_notes("cs3340", "week-3", first) == 3
+
+    folder = shelf.places.notes_dir("cs3340", "week-3")
+    assert len(list(folder.glob("*.png"))) == 3
+
+    replacement = [("only.png", write_png(tmp_path / "only.png", 9).read_bytes())]
+    assert shelf.replace_notes("cs3340", "week-3", replacement) == 1
+    assert len(list(folder.glob("*.png"))) == 1, "old note pages survived the replacement"
+    assert shelf.catalogue.lecture("cs3340", "week-3").note_count == 1
+
+
+def test_notes_must_be_images(shelf):
+    shelf.add_lecture("cs3340", "Week 3", "induction")
+    with pytest.raises(ServiceError, match="not an image"):
+        shelf.replace_notes("cs3340", "week-3", [("notes.pdf", b"%PDF")])
+
+
+def test_a_lecture_is_not_runnable_until_both_sources_exist(shelf, tmp_path):
+    shelf.add_lecture("cs3340", "Week 3", "induction")
+    lecture = shelf.catalogue.lecture("cs3340", "week-3")
+    assert not lecture.ready
+    with pytest.raises(ServiceError, match="Upload both"):
+        shelf.start("cs3340", lecture)
+
+    shelf.replace_slides("cs3340", "week-3", "deck.pdf",
+                         write_pdf(tmp_path / "d.pdf", SLIDES).read_bytes())
+    shelf.replace_notes("cs3340", "week-3",
+                        [("a.png", write_png(tmp_path / "n.png", 1).read_bytes())])
+    assert shelf.catalogue.lecture("cs3340", "week-3").ready
+
+
+def test_run_history_is_kept_per_lecture(shelf):
+    shelf.add_lecture("cs3340", "Week 3", "induction")
+    assert shelf.history("cs3340", "week-3") == []
+    shelf.catalogue.start_run("r1", "cs3340", "induction", "week-3")
+    shelf.catalogue.finish_run("r1", "done", document_path="/tmp/one.md")
+    shelf.catalogue.start_run("r2", "cs3340", "induction", "week-3")
+    shelf.catalogue.finish_run("r2", "done", document_path="/tmp/two.md")
+
+    history = shelf.history("cs3340", "week-3")
+    assert len(history) == 2, "every run is kept, not just the latest"
+    assert {r.id for r in history} == {"r1", "r2"}
+
+
+def test_deleting_a_lecture_keeps_its_finished_documents(shelf, tmp_path):
+    """Sources go, history stays: the documents are the point."""
+    shelf.add_lecture("cs3340", "Week 3", "induction")
+    shelf.replace_notes("cs3340", "week-3",
+                        [("a.png", write_png(tmp_path / "n.png", 1).read_bytes())])
+    shelf.catalogue.start_run("r1", "cs3340", "induction", "week-3")
+    shelf.catalogue.finish_run("r1", "done", document_path="/tmp/one.md")
+
+    shelf.delete_lecture("cs3340", "week-3")
+    assert not shelf.places.lecture("cs3340", "week-3").exists()
+    assert shelf.catalogue.run("r1").document_path == "/tmp/one.md"

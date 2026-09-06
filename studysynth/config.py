@@ -35,6 +35,10 @@ class Paths(BaseModel):
     def runs(self) -> Path:
         return self.root / "runs"
 
+    @property
+    def vectors(self) -> Path:
+        return self.root / "qdrant"
+
 
 class LlmSettings(BaseModel):
     backend: str = "mock"
@@ -60,7 +64,10 @@ class EmbeddingSettings(BaseModel):
 
 class QdrantSettings(BaseModel):
     url: str = "http://localhost:6333"
-    backend: str = "memory"
+    # local: an on-disk collection, so a textbook is embedded once and reused.
+    # memory: tests only, nothing survives the process.
+    # server: a Qdrant container, the only mode where payload indexes apply.
+    backend: str = "local"
     distance: str = "Cosine"
     # Declared at collection creation so chapter scoping (spec 7.2) filters
     # before the vector search rather than after it.

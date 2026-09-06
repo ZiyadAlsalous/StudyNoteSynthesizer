@@ -56,6 +56,22 @@ class ChapterRange(BaseModel):
     manual_override: bool = False
 
 
+class Lecture(BaseModel):
+    """One folder inside a course: a slide deck, note photos, and its runs."""
+
+    id: str
+    course: str
+    title: str
+    chapter: str = ""
+    created_at: datetime
+    slides_name: str = ""
+    note_count: int = 0
+
+    @property
+    def ready(self) -> bool:
+        return bool(self.slides_name) and self.note_count > 0
+
+
 class Chunk(BaseModel):
     """A child chunk: what gets embedded. Small, for retrieval precision."""
 
@@ -184,6 +200,7 @@ class RunRecord(BaseModel):
     id: str
     course: str
     chapter: str
+    lecture: str = ""
     status: str = "pending"
     created_at: datetime
     updated_at: datetime
@@ -197,6 +214,7 @@ class GraphState(TypedDict, total=False):
     run_id: str
     course: str
     chapter: str
+    lecture: str
     slides_dir: str
     notes_dir: str
 

@@ -7,23 +7,21 @@ the textbook is allowed in only where the first two leave a real gap.
 `study-synthesizer-spec.md` is the source of truth for behaviour. This file is
 how to run it.
 
-## Run it now, with no API key
-
-Mock mode is the default. Every LLM call is replayed from `fixtures/llm/*.json`
-and embeddings come from a deterministic local backend, so the whole pipeline
-runs offline.
+## Quickstart
 
     python -m venv .venv && source .venv/bin/activate
-    pip install -e ".[dev]"
-    cp .env.example .env
+    pip install -e ".[claude,qwen,dev]"
+    cp .env.example .env        # then paste your Anthropic key
+    python -m studysynth ui
 
-    python -m studysynth demo \
-        --textbook demo/textbook.pdf --slides demo/slides --notes demo/notes \
-        --out demo/out
+Open http://localhost:8501. Everything runs locally: the only thing that leaves
+your machine is the Claude API call, using your own key.
 
-That runs a full chapter: slides read, notes transcribed, review interrupt,
-concepts, gaps, drafting, the textbook gate, synthesis, verification. It writes
-`demo/out/runs/<id>/document.md` and a provenance report.
+## Developing with no API key
+
+Set `STUDYSYNTH_LLM__BACKEND=mock` and every Claude call is replayed from
+`fixtures/llm/*.json`, with embeddings from a deterministic local backend. The
+whole pipeline runs offline, which is what the test suite uses.
 
 ## The textbook gate
 
@@ -70,20 +68,19 @@ one line in one file.
       retrieval.py    the seven anti-bloat mechanisms
       graph.py        LangGraph nodes, checkpointer, review interrupt, verify loop
       render.py       Markdown to HTML/PDF, provenance tags, reports
-      api.py          FastAPI routes and SSE, thin (optional; the UI bypasses it)
-      worker.py       background job runner and service wiring
       evaluate.py     offline eval
-      ui.py           Streamlit interface, the whole UI in one file
+      services.py     everything the interface calls, wired once
+      ui.py           the whole interface: home, course, lecture
       prompts/        every prompt, as Markdown, never inlined in Python
     tests/
 
 Dependencies run one way and never back up:
 
-    config → models → {store, llm, embeddings} → {ingest, retrieval} → graph → {api, worker}
+    config → models → {store, llm, embeddings} → {ingest, retrieval} → graph → services → ui
 
 ## Checks
 
-    pytest              # 23 tests, one per anti-bloat mechanism plus a full mock run
+    pytest              # 37 tests: the seven controls, a full mock run, persistence
     mypy --strict       # clean across 14 source files
 
 ## Real mode
@@ -100,15 +97,23 @@ Payload indexes have no effect in Qdrant's in-memory mode, so chapter scoping
 
     python -m studysynth ui
 
-One page, one file, no build step. The sidebar holds setup: course, textbook
-upload, chapter page ranges you can correct, chapter selection. The main panel
-follows the run's own state: progress as each node completes, then the editable
-transcript beside your note photo at the review interrupt, then the finished
-document with provenance highlighting and the rejection report.
+Three screens, one file, no build step.
 
-Streamlit calls the pipeline in process. There is no second server and no HTTP
-hop between the interface and the graph. `api.py` still exists for programmatic
-access but the interface does not use it.
+**Home** is a grid of course boxes. Click one to open it, or create a course.
+
+**Course** holds the textbook and the lectures. The textbook is optional and
+indexed **once**: parsed, chunked, embedded and written to an on-disk Qdrant
+collection under `data/qdrant`. Every later run queries that index instead of
+re-embedding the book. Detected chapter page ranges are editable, because a
+wrong range silently narrows what the textbook may be searched for.
+
+**Lecture** is one folder per lecture: upload the professor's PDF and photos of
+your handwritten notes, build the document, and read the history. Replacing the
+notes deletes the previous images so a run never mixes two versions of a page,
+but **every past run is kept** and downloadable from the history list.
+
+Streamlit calls the pipeline in process. There is no second server, no HTTP hop
+and no build step.
 
 ## Known limits
 

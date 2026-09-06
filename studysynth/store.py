@@ -19,7 +19,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 
 from .config import Settings
-from .models import Chunk, ChapterRange, Parent, Rejection, RunRecord
+from .models import Chunk, ChapterRange, Lecture, Parent, Rejection, RunRecord
 
 
 class StoreError(RuntimeError):
@@ -28,6 +28,18 @@ class StoreError(RuntimeError):
 
 class CollectionMissing(StoreError):
     pass
+
+
+def _connect(settings: Settings) -> QdrantClient:
+    backend = settings.qdrant.backend
+    if backend == "memory":
+        return QdrantClient(location=":memory:")
+    if backend == "server":
+        return QdrantClient(url=settings.qdrant.url)
+    if backend == "local":
+        settings.paths.vectors.mkdir(parents=True, exist_ok=True)
+        return QdrantClient(path=str(settings.paths.vectors))
+    raise StoreError(f"Unknown qdrant backend {backend!r}")
 
 
 SCHEMA = """
@@ -45,15 +57,33 @@ CREATE TABLE IF NOT EXISTS chapters (
     manual      INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (course, chapter)
 );
+CREATE TABLE IF NOT EXISTS lectures (
+    id          TEXT NOT NULL,
+    course      TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    chapter     TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL,
+    slides_name TEXT NOT NULL DEFAULT '',
+    note_count  INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (course, id)
+);
 CREATE TABLE IF NOT EXISTS runs (
     id            TEXT PRIMARY KEY,
     course        TEXT NOT NULL,
     chapter       TEXT NOT NULL,
+    lecture       TEXT NOT NULL DEFAULT '',
     status        TEXT NOT NULL,
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL,
     document_path TEXT,
     error         TEXT
+);
+CREATE INDEX IF NOT EXISTS runs_lecture ON runs (course, lecture);
+CREATE TABLE IF NOT EXISTS textbooks (
+    course     TEXT PRIMARY KEY,
+    filename   TEXT NOT NULL,
+    chunks     INTEGER NOT NULL,
+    indexed_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS rejections (
     run_id       TEXT NOT NULL,
@@ -82,6 +112,24 @@ CREATE INDEX IF NOT EXISTS parents_chapter ON parents (course, chapter);
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _lecture(row: sqlite3.Row) -> Lecture:
+    return Lecture(
+        id=row["id"], course=row["course"], title=row["title"], chapter=row["chapter"],
+        created_at=datetime.fromisoformat(row["created_at"]),
+        slides_name=row["slides_name"], note_count=row["note_count"],
+    )
+
+
+def _run(row: sqlite3.Row) -> RunRecord:
+    return RunRecord(
+        id=row["id"], course=row["course"], chapter=row["chapter"], lecture=row["lecture"],
+        status=row["status"],
+        created_at=datetime.fromisoformat(row["created_at"]),
+        updated_at=datetime.fromisoformat(row["updated_at"]),
+        document_path=row["document_path"], error=row["error"],
+    )
 
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -190,13 +238,89 @@ class Catalogue:
         ]
 
     @_locked
-    def start_run(self, run_id: str, course: str, chapter: str) -> RunRecord:
+    def add_lecture(self, course: str, lecture_id: str, title: str, chapter: str = "") -> None:
+        self._db.execute(
+            "INSERT OR IGNORE INTO lectures (id, course, title, chapter, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (lecture_id, course, title, chapter, _now()),
+        )
+        self._db.commit()
+
+    @_locked
+    def lectures(self, course: str) -> list[Lecture]:
+        rows = self._db.execute(
+            "SELECT * FROM lectures WHERE course = ? ORDER BY created_at", (course,)
+        ).fetchall()
+        return [_lecture(row) for row in rows]
+
+    @_locked
+    def lecture(self, course: str, lecture_id: str) -> Lecture:
+        row = self._db.execute(
+            "SELECT * FROM lectures WHERE course = ? AND id = ?", (course, lecture_id)
+        ).fetchone()
+        if row is None:
+            raise StoreError(f"No lecture {lecture_id} in {course}")
+        return _lecture(row)
+
+    @_locked
+    def set_lecture_sources(
+        self, course: str, lecture_id: str, slides_name: str | None, note_count: int | None
+    ) -> None:
+        """Called after an upload. Either half can change on its own."""
+        if slides_name is not None:
+            self._db.execute(
+                "UPDATE lectures SET slides_name = ? WHERE course = ? AND id = ?",
+                (slides_name, course, lecture_id),
+            )
+        if note_count is not None:
+            self._db.execute(
+                "UPDATE lectures SET note_count = ? WHERE course = ? AND id = ?",
+                (note_count, course, lecture_id),
+            )
+        self._db.commit()
+
+    @_locked
+    def delete_lecture(self, course: str, lecture_id: str) -> None:
+        self._db.execute(
+            "DELETE FROM lectures WHERE course = ? AND id = ?", (course, lecture_id)
+        )
+        self._db.commit()
+
+    @_locked
+    def record_textbook(self, course: str, filename: str, chunks: int) -> None:
+        self._db.execute(
+            "INSERT OR REPLACE INTO textbooks (course, filename, chunks, indexed_at) "
+            "VALUES (?, ?, ?, ?)",
+            (course, filename, chunks, _now()),
+        )
+        self._db.commit()
+
+    @_locked
+    def textbook(self, course: str) -> dict[str, object] | None:
+        """What is already indexed, so a book is never embedded twice."""
+        row = self._db.execute(
+            "SELECT filename, chunks, indexed_at FROM textbooks WHERE course = ?", (course,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    @_locked
+    def runs_for(self, course: str, lecture_id: str) -> list[RunRecord]:
+        rows = self._db.execute(
+            "SELECT * FROM runs WHERE course = ? AND lecture = ? ORDER BY created_at DESC",
+            (course, lecture_id),
+        ).fetchall()
+        return [_run(row) for row in rows]
+
+    @_locked
+    def start_run(
+        self, run_id: str, course: str, chapter: str, lecture: str = ""
+    ) -> RunRecord:
         stamp = _now()
         self._db.execute(
             "INSERT OR REPLACE INTO runs "
-            "(id, course, chapter, status, created_at, updated_at) "
-            "VALUES (?, ?, ?, 'running', ?, ?)",
-            (run_id, course, chapter, stamp, stamp),
+            "(id, course, chapter, lecture, status, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, 'running', ?, ?)",
+            (run_id, course, chapter, lecture, stamp, stamp),
         )
         self._db.commit()
         return self.run(run_id)
@@ -217,16 +341,7 @@ class Catalogue:
         row = self._db.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
         if row is None:
             raise StoreError(f"No run {run_id}")
-        return RunRecord(
-            id=row["id"],
-            course=row["course"],
-            chapter=row["chapter"],
-            status=row["status"],
-            created_at=datetime.fromisoformat(row["created_at"]),
-            updated_at=datetime.fromisoformat(row["updated_at"]),
-            document_path=row["document_path"],
-            error=row["error"],
-        )
+        return _run(row)
 
     @_locked
     def log_rejections(self, run_id: str, rejections: Iterable[Rejection]) -> None:
@@ -299,6 +414,30 @@ class Places:
     def textbook(self, course: str) -> Path:
         return self.course(course) / "textbook.pdf"
 
+    def lecture(self, course: str, lecture: str) -> Path:
+        return self.course(course) / "lectures" / lecture
+
+    def slides_dir(self, course: str, lecture: str) -> Path:
+        target = self.lecture(course, lecture) / "slides"
+        target.mkdir(parents=True, exist_ok=True)
+        return target
+
+    def notes_dir(self, course: str, lecture: str) -> Path:
+        target = self.lecture(course, lecture) / "notes"
+        target.mkdir(parents=True, exist_ok=True)
+        return target
+
+    def clear(self, folder: Path) -> int:
+        """Replacing an upload removes what it replaces. Finished documents
+        live under runs/ and are never touched by this."""
+        removed = 0
+        if folder.is_dir():
+            for path in folder.iterdir():
+                if path.is_file():
+                    path.unlink()
+                    removed += 1
+        return removed
+
     def run(self, run_id: str) -> Path:
         return self._paths.runs / run_id
 
@@ -318,12 +457,24 @@ class VectorStore:
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        qdrant = settings.qdrant
-        self._client = (
-            QdrantClient(location=":memory:")
-            if qdrant.backend == "memory"
-            else QdrantClient(url=qdrant.url)
-        )
+        self._client = _connect(settings)
+
+    def exists(self, course: str) -> bool:
+        """Whether this course's textbook is already embedded.
+
+        The whole point of persisting: embedding a 1600-page book takes
+        minutes, and it must happen once per course, not once per run.
+        """
+        return bool(self._client.collection_exists(self.collection_for(course)))
+
+    def count(self, course: str) -> int:
+        if not self.exists(course):
+            return 0
+        return int(self._client.count(self.collection_for(course)).count)
+
+    def drop(self, course: str) -> None:
+        if self.exists(course):
+            self._client.delete_collection(self.collection_for(course))
 
     @staticmethod
     def collection_for(course: str) -> str:

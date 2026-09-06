@@ -32,7 +32,6 @@ services:
       # generated documents.
       - ./data:/app/data
       # Your textbook, slides and note photos.
-      - ./inputs:/app/inputs
       # The embedding model, so the container does not re-download it.
       - hf_cache:/root/.cache/huggingface
     depends_on:
