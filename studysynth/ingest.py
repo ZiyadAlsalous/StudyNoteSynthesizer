@@ -28,56 +28,93 @@ class OutlineMissing(IngestError):
 
 _HEADING = re.compile(r"^(#{1,4})\s+(.*)$", re.MULTILINE)
 _TABLE_ROW = re.compile(r"^\s*\|", re.MULTILINE)
+# `4 Divide-and-Conquer` but not `4.1 Multiplying matrices`.
+_CHAPTER_NUMBER = re.compile(r"^\d+\s+\S")
+_SENTENCE = re.compile(r"(?<=[.!?])\s+")
 _FORMULA_FENCE = re.compile(r"\$\$")
+
+
+_CHARS_PER_TOKEN = 4
 
 
 def estimate_tokens(text: str) -> int:
     """Four characters per token. Close enough to enforce a budget against."""
-    return max(1, len(text) // 4)
+    return max(1, len(text) // _CHARS_PER_TOKEN)
 
 
 def content_hash(data: bytes) -> str:
     return hashlib.blake2b(data, digest_size=16).hexdigest()
 
 
-def chapter_ranges(pdf: Path) -> list[ChapterRange]:
+def chapter_ranges(pdf: Path, level: int | None = None) -> list[ChapterRange]:
     """Read chapter boundaries from the PDF outline.
 
     Raises rather than guessing. A wrong page range silently poisons chapter
     scoping (spec 7.2), so the UI override exists for exactly this case.
     """
     import pypdf
-    from pypdf.generic import Destination
 
     reader = pypdf.PdfReader(str(pdf))
-    outline = reader.outline
-    entries: list[tuple[str, int]] = []
 
-    def walk(items: object) -> Iterator[tuple[str, int]]:
-        if isinstance(items, list):
-            for item in items:
-                yield from walk(item)
-        elif isinstance(items, Destination):
-            page = reader.get_destination_page_number(items)
-            if page is not None:
-                yield str(items.title), int(page) + 1
-
-    entries = list(walk(outline))
+    entries = _flatten(reader.outline, reader)
     if not entries:
         raise OutlineMissing(f"{pdf.name} has no outline; set page ranges manually")
 
+    depth = level if level is not None else _chapter_depth(entries)
     total = len(reader.pages)
     ranges: list[ChapterRange] = []
-    for index, (title, start) in enumerate(entries):
-        end = entries[index + 1][1] - 1 if index + 1 < len(entries) else total
-        if end < start:
-            end = start
+    for index, (own_depth, title, start) in enumerate(entries):
+        if own_depth != depth:
+            continue
+        # A chapter ends where the next entry at its level or shallower begins,
+        # never where its own first subsection begins.
+        end = total
+        for later_depth, _, later_start in entries[index + 1 :]:
+            if later_depth <= depth:
+                end = later_start - 1
+                break
         ranges.append(
             ChapterRange(
-                chapter=_slug(title), title=title.strip(), page_start=start, page_end=end
+                chapter=_slug(title),
+                title=title.strip(),
+                page_start=start,
+                page_end=max(start, end),
             )
         )
     return ranges
+
+
+def _flatten(outline: object, reader: object, depth: int = 0) -> list[tuple[int, str, int]]:
+    from pypdf.generic import Destination
+
+    found: list[tuple[int, str, int]] = []
+    if not isinstance(outline, list):
+        return found
+    for item in outline:
+        if isinstance(item, list):
+            found.extend(_flatten(item, reader, depth + 1))
+        elif isinstance(item, Destination):
+            page = reader.get_destination_page_number(item)  # type: ignore[attr-defined]
+            if page is not None:
+                found.append((depth, str(item.title), int(page) + 1))
+    return found
+
+
+def _chapter_depth(entries: list[tuple[int, str, int]]) -> int:
+    """The shallowest outline level that looks like numbered chapters.
+
+    Textbooks nest parts above chapters and sections below them. Taking every
+    level flattens `4 Divide-and-Conquer` against `4.1 Multiplying matrices`,
+    which truncates the chapter to the pages before its first subsection.
+    """
+    by_depth: dict[int, int] = {}
+    for depth, title, _ in entries:
+        if _CHAPTER_NUMBER.match(title.strip()):
+            by_depth[depth] = by_depth.get(depth, 0) + 1
+    for depth in sorted(by_depth):
+        if by_depth[depth] >= 3:
+            return depth
+    return min((depth for depth, _, _ in entries), default=0)
 
 
 def _slug(text: str) -> str:
@@ -147,25 +184,64 @@ class TextbookIngestor:
 
     @staticmethod
     def _split_to_size(text: str, limit: int) -> list[str]:
-        if estimate_tokens(text) <= limit:
+        """Split text so no piece exceeds `limit` tokens.
+
+        Measured in characters throughout, because `estimate_tokens` floors:
+        summing a per-line estimate undercounts the joined string and lets
+        pieces drift over the limit.
+        """
+        budget = limit * _CHARS_PER_TOKEN
+        if len(text) <= budget:
             return [text]
+
         pieces: list[str] = []
         current: list[str] = []
         size = 0
         in_formula = False
-        for line in text.splitlines(keepends=True):
-            if _FORMULA_FENCE.search(line):
-                in_formula = not in_formula
-            line_tokens = estimate_tokens(line)
-            breakable = not in_formula and not _TABLE_ROW.match(line) and not line.strip()
-            if size + line_tokens > limit and current and breakable:
+
+        def flush() -> None:
+            nonlocal current, size
+            if current:
                 pieces.append("".join(current))
                 current, size = [], 0
-            current.append(line)
-            size += line_tokens
-        if current:
-            pieces.append("".join(current))
+
+        for line in text.splitlines(keepends=True):
+            # Decided against the state *before* this line's fence: the line
+            # that closes a formula must stay with the formula, and the line
+            # that opens one is a valid place to start a new chunk.
+            was_in_formula = in_formula
+            if _FORMULA_FENCE.search(line):
+                in_formula = not in_formula
+            # Extracted PDF text often has no blank lines at all, so breaking
+            # only on paragraphs would mean never breaking. Any line boundary
+            # will do, as long as it is not inside a formula or a table.
+            breakable = not was_in_formula and not _TABLE_ROW.match(line)
+            # A single line can be longer than the whole budget; sentence ends
+            # are the only remaining boundary inside one.
+            parts = (
+                TextbookIngestor._sentences(line, budget) if len(line) > budget else [line]
+            )
+            for part in parts:
+                if size + len(part) > budget and current and breakable:
+                    flush()
+                current.append(part)
+                size += len(part)
+        flush()
         return pieces
+
+    @staticmethod
+    def _sentences(text: str, budget: int) -> list[str]:
+        """Break one over-long line at sentence ends. `budget` is characters."""
+        parts: list[str] = []
+        current = ""
+        for piece in _SENTENCE.split(text):
+            if current and len(current) + len(piece) > budget:
+                parts.append(current)
+                current = ""
+            current += piece + " "
+        if current.strip():
+            parts.append(current)
+        return parts or [text]
 
     def _children(self, parent: Parent) -> list[Chunk]:
         pieces = self._split_to_size(parent.text, self._chunks.child_tokens)
