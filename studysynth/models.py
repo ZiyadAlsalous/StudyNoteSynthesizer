@@ -214,7 +214,7 @@ class GraphState(TypedDict, total=False):
     slides_dir: str
     notes_dir: str
 
-    # Written by one node each and replaced wholesale at the review interrupt, so these must no.
+    # Replaced wholesale at the review interrupt, so these must not accumulate.
     slides: list[SlidePage]
     notes: list[NotePage]
     notes_approved: bool

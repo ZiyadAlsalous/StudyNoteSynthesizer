@@ -176,7 +176,7 @@ class TextbookGate:
         gaps: Sequence[Gap],
         drafts: Sequence[DraftedConcept],
     ) -> Survivors:
-        """A different question from relevance: does the student still need it? Graded agains."""
+        """A different question from relevance: does the student still need it?"""
         questions = {gap.id: gap.question for gap in gaps}
         draft_text = "\n\n".join(f"### {d.heading}\n{d.body}" for d in drafts)
         kept, rejected = [], []
