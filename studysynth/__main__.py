@@ -56,6 +56,7 @@ def _demo(argv: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="studysynth")
     commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("ui")
     commands.add_parser("serve")
     demo = commands.add_parser("demo")
     demo.add_argument("--course", default="cs3340")
@@ -68,10 +69,22 @@ def main(argv: list[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
     if arguments.command == "demo":
         return _demo(arguments)
+    if arguments.command == "ui":
+        return _ui()
     from .api import serve
 
     serve()
     return 0
+
+
+def _ui() -> int:
+    """Streamlit owns its own server, so hand off rather than import it."""
+    import subprocess
+
+    page = Path(__file__).parent / "ui.py"
+    return subprocess.call(
+        [sys.executable, "-m", "streamlit", "run", str(page), "--server.headless", "true"]
+    )
 
 
 if __name__ == "__main__":

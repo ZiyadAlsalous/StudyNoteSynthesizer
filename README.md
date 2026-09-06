@@ -70,11 +70,11 @@ one line in one file.
       retrieval.py    the seven anti-bloat mechanisms
       graph.py        LangGraph nodes, checkpointer, review interrupt, verify loop
       render.py       Markdown to HTML/PDF, provenance tags, reports
-      api.py          FastAPI routes and SSE, thin
+      api.py          FastAPI routes and SSE, thin (optional; the UI bypasses it)
       worker.py       background job runner and service wiring
       evaluate.py     offline eval
+      ui.py           Streamlit interface, the whole UI in one file
       prompts/        every prompt, as Markdown, never inlined in Python
-    web/              React + Vite + TypeScript + Tailwind, one page
     tests/
 
 Dependencies run one way and never back up:
@@ -96,20 +96,19 @@ call is made, never at import, so nothing about the mock path depends on it.
 Payload indexes have no effect in Qdrant's in-memory mode, so chapter scoping
 (7.2) should be exercised against the container before you trust it.
 
-## Frontend
+## Interface
 
-    cd web && npm install && npm run dev
+    python -m studysynth ui
 
-One page, no tabs. A sidebar holds setup (course, textbook, chapter ranges,
-source folders) and collapses to a label once a run starts. The main panel
-follows the run's own state: a progress line, then the editable transcript
-beside the source image at the review interrupt, then the finished document with
-provenance highlighting and the rejection report.
+One page, one file, no build step. The sidebar holds setup: course, textbook
+upload, chapter page ranges you can correct, chapter selection. The main panel
+follows the run's own state: progress as each node completes, then the editable
+transcript beside your note photo at the review interrupt, then the finished
+document with provenance highlighting and the rejection report.
 
-Nothing in the page re-fetches what it already has. Progress arrives over SSE
-rather than polling, the document is fetched once and provenance highlighting is
-a CSS class rather than a round trip, and moving between the three moments of a
-run is a state change rather than a page load.
+Streamlit calls the pipeline in process. There is no second server and no HTTP
+hop between the interface and the graph. `api.py` still exists for programmatic
+access but the interface does not use it.
 
 ## Known limits
 

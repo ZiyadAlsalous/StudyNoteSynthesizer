@@ -6,7 +6,6 @@ If a route grows a second decision, that decision belongs in worker.py or below.
 from __future__ import annotations
 
 import json
-import logging
 import shutil
 import uuid
 from pathlib import Path
@@ -14,7 +13,6 @@ from typing import Annotated, Any, Callable, Iterator, TypeVar
 
 from fastapi import Depends, FastAPI, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .config import Settings, load
@@ -175,28 +173,10 @@ def _found(call: Callable[[], T]) -> T:
         raise HTTPException(status_code=404, detail=str(error)) from error
 
 
-WEB_DIST = Path(__file__).parent.parent / "web" / "dist"
-
-
-def mount_frontend() -> bool:
-    """Serve the built single-page app under the API routes.
-
-    Mounted last so every route above still wins; `html=True` sends index.html
-    for unknown paths. Absent in development, where Vite serves the app.
-    """
-    if not (WEB_DIST / "index.html").exists():
-        return False
-    app.mount("/", StaticFiles(directory=str(WEB_DIST), html=True), name="web")
-    return True
-
-
 def serve(settings: Settings | None = None) -> None:
+    """The HTTP API. The Streamlit interface does not use it: `ui.py` calls the
+    pipeline in process. This exists for programmatic access."""
     import uvicorn
 
     resolved = settings or load()
-    if not mount_frontend():
-        logging.getLogger(__name__).warning(
-            "No built frontend at %s; serving the API only. Run `npm run build` in web/.",
-            WEB_DIST,
-        )
     uvicorn.run(app, host=resolved.server.host, port=resolved.server.port)
