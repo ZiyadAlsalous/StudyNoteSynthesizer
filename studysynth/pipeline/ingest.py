@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from ..config import Settings
@@ -314,8 +315,9 @@ class NoteIngestor:
         if not images:
             raise IngestError(f"No notes PDF found at {source}")
         prompt = self._prompts.render("ocr_notes")
-        pages: list[NotePage] = []
-        for number, image in enumerate(images, start=1):
+
+        def transcribe(numbered: tuple[int, Path]) -> NotePage:
+            number, image = numbered
             digest = content_hash(image.read_bytes())
             cache = self._places.note_cache(digest)
             if cache.exists():
@@ -323,15 +325,14 @@ class NoteIngestor:
             else:
                 markdown = self._client.vision(prompt, image, job="ocr_notes")
                 cache.write_text(markdown, encoding="utf-8")
-            pages.append(
-                NotePage(
-                    page=number,
-                    image_path=str(image),
-                    content_hash=digest,
-                    markdown=markdown,
-                )
+            return NotePage(
+                page=number, image_path=str(image), content_hash=digest, markdown=markdown
             )
-        return pages
+
+        # A thirty-page export is thirty independent vision calls.
+        workers = min(self._settings.notes.max_parallel_ocr, len(images))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            return list(pool.map(transcribe, enumerate(images, start=1)))
 
     def _images(self, source: Path) -> list[Path]:
         """Notes are always a PDF: a GoodNotes export or a scan, of any length."""

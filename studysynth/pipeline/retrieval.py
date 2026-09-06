@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 from pydantic import BaseModel, Field
@@ -59,6 +60,23 @@ class TextbookGate:
         self._vectors = vectors
         self._catalogue = catalogue
         self._prompts = PromptLibrary(settings.prompts_dir)
+
+    def _grade(
+        self, candidates: Sequence[Candidate], judge: Callable[[Candidate], tuple[Candidate | None, Rejection | None]]
+    ) -> Survivors:
+        """Run a grader over every candidate at once, then restore their order.
+
+        Order matters: the rejection log and the budget both depend on it, and a
+        thread pool returns whatever finishes first.
+        """
+        if not candidates:
+            return [], []
+        workers = min(self._config.max_parallel_grading, len(candidates))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            verdicts = list(pool.map(judge, candidates))
+        kept = [candidate for candidate, _ in verdicts if candidate is not None]
+        rejected = [rejection for _, rejection in verdicts if rejection is not None]
+        return kept, rejected
 
     # 7.1 gap-triggered querying ------------------------------------------------
 
@@ -154,9 +172,29 @@ class TextbookGate:
     # 7.3 relevance grading -----------------------------------------------------
 
     def grade_relevance(self, candidates: Sequence[Candidate], gaps: Sequence[Gap]) -> Survivors:
+        """Graded by the index first, then by a model.
+
+        The cosine floor is the same question asked more cheaply, so its
+        rejections are logged under 7.3 like any other. Nothing disappears
+        without a reason and a score: spec 7.8.
+        """
         questions = {gap.id: gap.question for gap in gaps}
-        kept, rejected = [], []
-        for candidate in candidates:
+        floor = self._config.min_vector_score
+        cheap = [
+            Rejection(
+                candidate_id=candidate.id,
+                gap_id=candidate.gap_id,
+                mechanism="7.3 relevance grading (vector floor)",
+                reason=Reason.BELOW_RELEVANCE,
+                score=candidate.retrieval_score,
+                detail=f"index score below {floor}",
+            )
+            for candidate in candidates
+            if candidate.retrieval_score < floor
+        ]
+        candidates = [c for c in candidates if c.retrieval_score >= floor]
+
+        def judge(candidate: Candidate) -> tuple[Candidate | None, Rejection | None]:
             prompt = self._prompts.render(
                 "grade_relevance",
                 {
@@ -172,19 +210,18 @@ class TextbookGate:
             )
             graded = candidate.model_copy(update={"relevance": verdict.score})
             if verdict.score >= self._config.min_relevance:
-                kept.append(graded)
-            else:
-                rejected.append(
-                    Rejection(
-                        candidate_id=candidate.id,
-                        gap_id=candidate.gap_id,
-                        mechanism="7.3 relevance grading",
-                        reason=Reason.BELOW_RELEVANCE,
-                        score=verdict.score,
-                        detail=verdict.reason,
-                    )
-                )
-        return kept, rejected
+                return graded, None
+            return None, Rejection(
+                candidate_id=candidate.id,
+                gap_id=candidate.gap_id,
+                mechanism="7.3 relevance grading",
+                reason=Reason.BELOW_RELEVANCE,
+                score=verdict.score,
+                detail=verdict.reason,
+            )
+
+        kept, rejected = self._grade(candidates, judge)
+        return kept, cheap + rejected
 
     # 7.4 necessity grading -----------------------------------------------------
 
@@ -197,8 +234,8 @@ class TextbookGate:
         """A different question from relevance: does the student still need it?"""
         questions = {gap.id: gap.question for gap in gaps}
         draft_text = "\n\n".join(f"### {d.heading}\n{d.body}" for d in drafts)
-        kept, rejected = [], []
-        for candidate in candidates:
+
+        def judge(candidate: Candidate) -> tuple[Candidate | None, Rejection | None]:
             prompt = self._prompts.render(
                 "grade_necessity",
                 {
@@ -213,19 +250,17 @@ class TextbookGate:
             )
             graded = candidate.model_copy(update={"necessity": verdict.score})
             if verdict.score >= self._config.min_necessity:
-                kept.append(graded)
-            else:
-                rejected.append(
-                    Rejection(
-                        candidate_id=candidate.id,
-                        gap_id=candidate.gap_id,
-                        mechanism="7.4 necessity grading",
-                        reason=Reason.NOT_NECESSARY,
-                        score=verdict.score,
-                        detail=verdict.reason,
-                    )
-                )
-        return kept, rejected
+                return graded, None
+            return None, Rejection(
+                candidate_id=candidate.id,
+                gap_id=candidate.gap_id,
+                mechanism="7.4 necessity grading",
+                reason=Reason.NOT_NECESSARY,
+                score=verdict.score,
+                detail=verdict.reason,
+            )
+
+        return self._grade(candidates, judge)
 
     # 7.5 novelty filter --------------------------------------------------------
 
@@ -264,12 +299,12 @@ class TextbookGate:
     def guard_new_concepts(
         self, candidates: Sequence[Candidate], concepts: Sequence[Concept]
     ) -> Survivors:
-        """The slides define the examinable surface."""
+        """The slides define the examinable surface; the textbook may not add to it."""
         if not self._config.new_concept_guard:
             return list(candidates), []
         names = ", ".join(concept.name for concept in concepts)
-        kept, rejected = [], []
-        for candidate in candidates:
+
+        def judge(candidate: Candidate) -> tuple[Candidate | None, Rejection | None]:
             prompt = self._prompts.render(
                 "new_concept_guard", {"concept_names": names, "passage": candidate.text}
             )
@@ -278,18 +313,16 @@ class TextbookGate:
                 effort=self._settings.llm.grading_effort,
             )
             if not verdict.terms:
-                kept.append(candidate)
-            else:
-                rejected.append(
-                    Rejection(
-                        candidate_id=candidate.id,
-                        gap_id=candidate.gap_id,
-                        mechanism="7.6 new-concept guard",
-                        reason=Reason.INTRODUCES_CONCEPT,
-                        detail=", ".join(verdict.terms),
-                    )
-                )
-        return kept, rejected
+                return candidate, None
+            return None, Rejection(
+                candidate_id=candidate.id,
+                gap_id=candidate.gap_id,
+                mechanism="7.6 new-concept guard",
+                reason=Reason.INTRODUCES_CONCEPT,
+                detail=", ".join(verdict.terms),
+            )
+
+        return self._grade(candidates, judge)
 
     # 7.7 budget enforcement ----------------------------------------------------
 

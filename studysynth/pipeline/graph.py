@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Iterator, cast
 
 from langchain_core.runnables import RunnableConfig
@@ -113,8 +114,7 @@ class Nodes:
         """Drafted from slides and notes only."""
         slides = {page.page: page.markdown for page in state.get("slides", [])}
         notes = _join(page.markdown for page in note_pages(state))
-        drafts: list[DraftedConcept] = []
-        for concept in state.get("concepts", []):
+        def draft(concept: Concept) -> DraftedConcept:
             prompt = self._prompts.render(
                 "draft_concept",
                 {
@@ -125,16 +125,20 @@ class Nodes:
             )
             body = self._llm.complete(prompt, job="draft_concept")
             pages = ", ".join(str(page) for page in concept.slide_pages)
-            drafts.append(
-                DraftedConcept(
-                    concept_id=concept.id,
-                    heading=f"{concept.name} (Pages {pages})" if pages else concept.name,
-                    body=body,
-                    slide_pages=concept.slide_pages,
-                    sources=[Source.SLIDES] + ([Source.NOTES] if concept.covered_by_notes else []),
-                )
+            return DraftedConcept(
+                concept_id=concept.id,
+                heading=f"{concept.name} (Pages {pages})" if pages else concept.name,
+                body=body,
+                slide_pages=concept.slide_pages,
+                sources=[Source.SLIDES] + ([Source.NOTES] if concept.covered_by_notes else []),
             )
-        return {"drafts": drafts}
+
+        concepts = state.get("concepts", [])
+        if not concepts:
+            return {"drafts": []}
+        workers = min(self._settings.retrieval.max_parallel_grading, len(concepts))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            return {"drafts": list(pool.map(draft, concepts))}
 
     def retrieve_textbook(self, state: GraphState) -> dict[str, Any]:
         outcome = self._gate.run(

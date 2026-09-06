@@ -232,3 +232,26 @@ def test_admitted_passages_carry_a_provenance_citation(settings, embeddings):
         [make_candidate("a", tokens=100, necessity=0.9)], document_tokens=100_000
     )
     assert admitted[0].citation == "[C: pages 10-14]"
+
+
+def test_the_vector_floor_is_off_by_default(settings):
+    """It steals work from 7.3 and 7.4, so it must be switched on deliberately."""
+    assert settings.retrieval.min_vector_score == 0.0
+
+
+def test_the_vector_floor_logs_what_it_drops(settings, embeddings):
+    """Spec 7.8: nothing disappears without a reason and a score, however cheap
+    the mechanism that removed it."""
+    settings.retrieval.min_vector_score = 0.5
+    llm = StubLlm({"grade_relevance": {"keep": {"score": 0.9}}})
+    weak = make_candidate("weak")
+    weak = weak.model_copy(update={"retrieval_score": 0.2})
+    strong = make_candidate("keep")
+
+    kept, rejected = gate(settings, llm, embeddings).grade_relevance([weak, strong], [make_gap()])
+    assert [c.id for c in kept] == ["keep"]
+    assert rejected[0].candidate_id == "weak"
+    assert rejected[0].reason is Reason.BELOW_RELEVANCE
+    assert rejected[0].score == pytest.approx(0.2)
+    assert "vector floor" in rejected[0].mechanism
+    assert ("grade_relevance", "weak") not in llm.jobs, "the floor should run before the model"

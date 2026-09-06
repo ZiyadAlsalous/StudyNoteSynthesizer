@@ -74,6 +74,7 @@ class QdrantSettings(BaseModel):
 class NoteSettings(BaseModel):
     # Handwriting needs the detail; 200 dpi is legible without huge payloads.
     render_dpi: int = 200
+    max_parallel_ocr: int = 6
 
 
 class ChunkSettings(BaseModel):
@@ -91,6 +92,12 @@ class RetrievalSettings(BaseModel):
     # With no chapter chosen, the gaps themselves say which chapters to read.
     auto_scope_chapters: int = 2
     auto_scope_probe: int = 40
+    # Graders are independent per candidate, so they run concurrently.
+    max_parallel_grading: int = 8
+    # A cheap cosine floor before any model sees a candidate. Off by default:
+    # it steals work from 7.3 and 7.4, and a safe value depends on the score
+    # distribution of whichever embedding model is configured. Measure first.
+    min_vector_score: float = 0.0
     # 7.3 relevance grading
     top_k: int = 20
     min_relevance: float = Field(default=0.55, ge=0.0, le=1.0)

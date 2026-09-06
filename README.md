@@ -181,11 +181,9 @@ GitHub.
 
 ## 🗺️ Roadmap
 
-- [ ] Parallelise the grading calls — they are independent per candidate and currently
-      run one after another, which dominates wall-clock time
 - [ ] Prompt caching on the graders, where the drafted chapter is identical across
       every candidate in a run
-- [ ] A cheap vector-score floor before the LLM relevance grader, to cut call count
+- [ ] Tune the vector floor against real Qwen scores and switch it on
 - [ ] A layout-aware parser, so structural chunking sees real headings instead of
       the flat text `pypdf` returns
 - [ ] Re-tune the novelty threshold against Qwen rather than the lexical mock
