@@ -8,3 +8,7 @@ class StoreError(RuntimeError):
 
 class CollectionMissing(StoreError):
     pass
+
+
+class IndexBusy(StoreError):
+    """The on-disk index is held by another process."""

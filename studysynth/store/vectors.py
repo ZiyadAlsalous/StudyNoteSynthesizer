@@ -9,7 +9,7 @@ from qdrant_client.http import models as qmodels
 
 from ..config import Settings
 from ..models import Chunk
-from .errors import CollectionMissing, StoreError
+from .errors import CollectionMissing, IndexBusy, StoreError
 
 
 def _connect(settings: Settings) -> QdrantClient:
@@ -20,7 +20,17 @@ def _connect(settings: Settings) -> QdrantClient:
         return QdrantClient(url=settings.qdrant.url)
     if backend == "local":
         settings.paths.vectors.mkdir(parents=True, exist_ok=True)
-        return QdrantClient(path=str(settings.paths.vectors))
+        try:
+            return QdrantClient(path=str(settings.paths.vectors))
+        except RuntimeError as error:
+            # An embedded index is single-process. A second copy of the app, or
+            # one left running after a crash, holds the lock.
+            if "already accessed" not in str(error):
+                raise
+            raise IndexBusy(
+                f"The index at {settings.paths.vectors} is open in another process. "
+                "Close the other copy of the app, or run: pkill -f 'studysynth ui'"
+            ) from error
     raise StoreError(f"Unknown qdrant backend {backend!r}")
 
 

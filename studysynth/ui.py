@@ -11,7 +11,7 @@ from studysynth.config import Settings, load
 from studysynth.models import ChapterRange, Lecture, NotePage, RetrievalOutcome, RunRecord
 from studysynth.pipeline.render import provenance_report, to_html
 from studysynth.services import Library, ServiceError, build
-from studysynth.store import StoreError
+from studysynth.store import IndexBusy, StoreError
 
 STEPS = {
     "ingest_slides": "Reading the slides",
@@ -417,7 +417,19 @@ def finished(shelf: Library, run_id: str) -> None:
 
 def main() -> None:
     st.set_page_config(page_title="Study Note Synthesizer", layout="wide")
-    _settings, shelf = library()
+    try:
+        _settings, shelf = library()
+    except IndexBusy as error:
+        st.title("Study Note Synthesizer")
+        st.error(str(error))
+        st.caption(
+            "The textbook index is a single-process store, so only one copy of "
+            "the app can run at a time. Everything you have saved is intact."
+        )
+        if st.button("Try again"):
+            library.clear()
+            st.rerun()
+        return
 
     course = st.query_params.get("course", "")
     lecture_id = st.query_params.get("lecture", "")

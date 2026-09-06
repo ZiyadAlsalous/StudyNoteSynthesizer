@@ -135,7 +135,11 @@ python -m studysynth ui
 ```
 
 Open **http://localhost:8501**. Create a course, upload a textbook once, add a
-lecture, upload your slides and note photos, and build.
+lecture, upload your slides and your notes PDF, and build.
+
+Only one copy can run at a time: the index is an embedded single-process store.
+If the app says the index is busy, close the other copy or run
+`pkill -f 'studysynth ui'`. Nothing saved is lost.
 
 ```bash
 # Develop with no API key and no cost — replays recorded fixtures

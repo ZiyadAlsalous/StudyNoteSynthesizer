@@ -385,3 +385,18 @@ def test_notes_survive_the_review_interrupt_as_objects(project):
 
     list(runner.stream("run-notes"))
     assert runner.state("run-notes")["document"]
+
+
+def test_a_second_process_gets_a_clear_message_not_a_stack_trace(tmp_path):
+    """The embedded index is single-process. Two copies of the app, or one left
+    running after a crash, must not greet the user with a RuntimeError."""
+    from studysynth.store import IndexBusy, VectorStore
+
+    settings = mock_settings(tmp_path)
+    settings.qdrant.backend = "local"
+    holder = VectorStore(settings)
+    try:
+        with pytest.raises(IndexBusy, match="another process"):
+            VectorStore(settings)
+    finally:
+        del holder
