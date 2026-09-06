@@ -62,11 +62,13 @@ class TextbookGate:
 
     # 7.1 gap-triggered querying ------------------------------------------------
 
-    def retrieve(self, course: str, chapter: str, gaps: Sequence[Gap]) -> list[Candidate]:
+    def retrieve(
+        self, course: str, chapter: str, gaps: Sequence[Gap], chapters: Sequence[str] | None = None
+    ) -> list[Candidate]:
         """The textbook is queried once per gap and never otherwise."""
         if not gaps:
             return []
-        chapters = self._scope(course, chapter)
+        chapters = list(chapters) if chapters is not None else self._scope(course, chapter)
         candidates: list[Candidate] = []
         for gap in gaps:
             vector = self._embeddings.embed_query(gap.query)
@@ -100,6 +102,25 @@ class TextbookGate:
         return sorted(best.values(), key=lambda c: -c.retrieval_score)
 
     # 7.2 chapter scoping -------------------------------------------------------
+
+    def detect_chapters(self, course: str, gaps: Sequence[Gap]) -> list[str]:
+        """Which chapters the notes are about, decided by the gaps themselves."""
+        # A student should not have to know their induction lecture is chapter 4.
+        # One unscoped probe finds where the answers live; the real per-gap
+        # queries are then scoped to those chapters as usual.
+        if not gaps:
+            return []
+        weight: dict[str, float] = {}
+        for gap in gaps:
+            vector = self._embeddings.embed_query(gap.query)
+            for score, payload in self._vectors.search(
+                course, vector.tolist(), [], self._config.auto_scope_probe
+            ):
+                name = str(payload.get("chapter", ""))
+                if name:
+                    weight[name] = weight.get(name, 0.0) + float(score)
+        ranked = sorted(weight, key=lambda name: -weight[name])
+        return ranked[: self._config.auto_scope_chapters]
 
     def _scope(self, course: str, chapter: str) -> list[str]:
         """Which chapters the filter admits."""
@@ -325,9 +346,11 @@ class TextbookGate:
         drafts: Sequence[DraftedConcept],
     ) -> RetrievalOutcome:
         rejections: list[Rejection] = []
-        candidates = self.retrieve(course, chapter, gaps)
+        auto = not chapter
+        chapters = self.detect_chapters(course, gaps) if auto else self._scope(course, chapter)
+        candidates = self.retrieve(course, chapter, gaps, chapters)
 
-        kept, dropped = self.check_scope(candidates, self._scope(course, chapter))
+        kept, dropped = self.check_scope(candidates, chapters)
         rejections += dropped
         kept, dropped = self.grade_relevance(kept, gaps)
         rejections += dropped
@@ -343,5 +366,6 @@ class TextbookGate:
         rejections += dropped
 
         return RetrievalOutcome(
-            admitted=admitted, rejections=rejections, tokens_admitted=spent, budget=budget
+            chapters=chapters, auto_scoped=auto, admitted=admitted,
+            rejections=rejections, tokens_admitted=spent, budget=budget,
         )

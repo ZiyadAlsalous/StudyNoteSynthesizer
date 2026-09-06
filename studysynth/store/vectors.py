@@ -105,12 +105,18 @@ class VectorStore:
         name = self.collection_for(course)
         if not self._client.collection_exists(name):
             raise CollectionMissing(f"Collection {name} does not exist")
-        condition = qmodels.Filter(
-            must=[
-                qmodels.FieldCondition(
-                    key="chapter", match=qmodels.MatchAny(any=list(chapters))
-                )
-            ]
+        # No chapters means the whole book, which is how a chapter is detected
+        # in the first place.
+        condition = (
+            qmodels.Filter(
+                must=[
+                    qmodels.FieldCondition(
+                        key="chapter", match=qmodels.MatchAny(any=list(chapters))
+                    )
+                ]
+            )
+            if chapters
+            else None
         )
         found = self._client.query_points(
             collection_name=name,

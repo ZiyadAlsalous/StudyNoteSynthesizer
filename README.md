@@ -51,7 +51,7 @@ Spec section 7. Each mechanism rejects, and each rejection is logged.
 | | Mechanism | Rejects |
 |---|---|---|
 | 7.1 | Gap-triggered querying | Speculative retrieval. No code path queries the textbook without a detected gap. |
-| 7.2 | Chapter scoping | Off-syllabus chapters, filtered inside the index before the vector search. |
+| 7.2 | Chapter scoping | Off-topic chapters. The chapters matching your notes are found automatically, then filtered inside the index before the vector search. |
 | 7.3 | Relevance grading | Topical near-misses that share vocabulary but answer nothing. |
 | 7.4 | Necessity grading | Correct, relevant prose you already have from the slides. The largest bloat source. |
 | 7.5 | Novelty filter | The textbook restating a slide at ten times the length. |

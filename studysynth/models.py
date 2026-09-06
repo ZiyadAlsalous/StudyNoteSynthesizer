@@ -178,6 +178,8 @@ class Rejection(BaseModel):
 
 
 class RetrievalOutcome(BaseModel):
+    chapters: list[str] = Field(default_factory=list)
+    auto_scoped: bool = False
     admitted: list[Admitted] = Field(default_factory=list)
     rejections: list[Rejection] = Field(default_factory=list)
     tokens_admitted: int = 0

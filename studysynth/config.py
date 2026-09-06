@@ -84,6 +84,9 @@ class RetrievalSettings(BaseModel):
 
     # 7.2 chapter scoping
     allow_adjacent_chapters: bool = False
+    # With no chapter chosen, the gaps themselves say which chapters to read.
+    auto_scope_chapters: int = 2
+    auto_scope_probe: int = 40
     # 7.3 relevance grading
     top_k: int = 20
     min_relevance: float = Field(default=0.55, ge=0.0, le=1.0)

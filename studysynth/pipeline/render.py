@@ -38,6 +38,12 @@ DOCUMENT_HTML = """<!doctype html>
 
 REPORT_MD = """# Provenance report — {{ course }} / {{ chapter }}
 
+{% if outcome.chapters -%}
+Searched {{ outcome.chapters | join(", ") }}{% if outcome.auto_scoped %}, chosen automatically from the gaps in your notes{% endif %}.
+{%- else -%}
+No textbook chapter was searched.
+{%- endif %}
+
 Textbook tokens admitted: **{{ outcome.tokens_admitted }}** of a **{{ outcome.budget }}** budget.
 Passages admitted: **{{ outcome.admitted | length }}**. Rejected: **{{ outcome.rejections | length }}**.
 

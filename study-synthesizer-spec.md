@@ -115,13 +115,21 @@ not from free text typed by the student.
 
 ### 7.2 Chapter scoping
 
-Every query filters to the chapter's page range before the vector search runs,
-using a payload index declared at collection creation. Filtering after the search
-is a bug, not a slower equivalent.
+Every query filters to a chapter before the vector search runs, using a payload
+index declared at collection creation. Filtering after the search is a bug, not a
+slower equivalent.
+
+Which chapter is normally decided by the system, not the student. Nobody should
+have to know that their induction lecture maps to chapter 4. One unscoped probe
+runs the gap queries across the whole book, the chapters carrying the strongest
+hits are taken, and the real per-gap queries are scoped to those. A chapter may
+still be pinned by hand when the automatic choice is wrong.
 
 *Rejects:* material from chapters the lecture has not reached, and from chapters
 already covered, both of which read as off-syllabus to the student.
-*Config:* `retrieval.allow_adjacent_chapters` (default `false`).
+*Config:* `retrieval.allow_adjacent_chapters` (default `false`),
+`retrieval.auto_scope_chapters` (default 2), `retrieval.auto_scope_probe`
+(default 40).
 *Log:* rejected candidates record `out_of_chapter`.
 
 ### 7.3 Relevance grading

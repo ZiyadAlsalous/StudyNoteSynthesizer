@@ -42,6 +42,48 @@ def test_scope_is_a_single_chapter_unless_adjacency_is_enabled(settings, embeddi
     assert gate(settings, StubLlm(), embeddings)._scope("cs3340", "induction") == ["induction"]
 
 
+class StubVectors:
+    """Returns chapter hits for the auto-scoping probe."""
+
+    def __init__(self, hits):
+        self.hits = hits
+        self.filters: list[list[str]] = []
+
+    def search(self, course, vector, chapters, limit):
+        self.filters.append(list(chapters))
+        return self.hits
+
+
+def auto_gate(settings, vectors, embeddings):
+    return TextbookGate(settings, StubLlm(), embeddings, vectors, catalogue=None)  # type: ignore[arg-type]
+
+
+def test_chapters_are_detected_from_the_gaps_when_none_is_pinned(settings, embeddings):
+    """A student should not have to know their induction lecture is chapter 4."""
+    vectors = StubVectors([
+        (0.91, {"chapter": "4-divide-and-conquer"}),
+        (0.88, {"chapter": "4-divide-and-conquer"}),
+        (0.42, {"chapter": "22-elementary-graph-algorithms"}),
+    ])
+    found = auto_gate(settings, vectors, embeddings).detect_chapters("cs3340", [make_gap()])
+    assert found[0] == "4-divide-and-conquer", "the strongest chapter should win"
+    assert vectors.filters == [[]], "the probe must search the whole book, unfiltered"
+
+
+def test_detection_returns_at_most_the_configured_number_of_chapters(settings, embeddings):
+    settings.retrieval.auto_scope_chapters = 2
+    vectors = StubVectors([(0.9, {"chapter": f"ch{n}"}) for n in range(6)])
+    found = auto_gate(settings, vectors, embeddings).detect_chapters("cs3340", [make_gap()])
+    assert len(found) == 2
+
+
+def test_detection_does_nothing_without_a_gap(settings, embeddings):
+    """7.1 still holds: no gap, no textbook query, not even a probe."""
+    vectors = StubVectors([(0.9, {"chapter": "anything"})])
+    assert auto_gate(settings, vectors, embeddings).detect_chapters("cs3340", []) == []
+    assert vectors.filters == []
+
+
 # 7.3 relevance grading --------------------------------------------------------
 
 def test_relevance_drops_a_topical_near_miss(settings, embeddings):

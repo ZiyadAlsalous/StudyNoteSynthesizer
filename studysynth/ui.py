@@ -182,7 +182,10 @@ def lectures_section(shelf: Library, course: str) -> None:
         st.markdown("**New lecture**")
         left, right = st.columns([2, 2])
         name = left.text_input("Name", placeholder="Week 3 — Induction")
-        chapter = right.selectbox("Textbook chapter", ["(none)"] + list(chapters))
+        chapter = right.selectbox(
+            "Textbook chapter", ["Find it automatically"] + list(chapters),
+            help="Leave this alone unless you want to pin the search to one chapter.",
+        )
         if st.form_submit_button("Create lecture") and name.strip():
             shelf.add_lecture(course, name.strip(), chapters.get(chapter, ""))
             st.rerun()
@@ -262,7 +265,10 @@ def start_section(shelf: Library, course: str, lecture: Lecture) -> None:
         st.info("Upload both the slides and your note photos to build this lecture.")
         return
     if not lecture.chapter:
-        st.warning("No textbook chapter set, so the textbook will not be consulted.")
+        st.caption(
+            "No chapter pinned, so the textbook chapters closest to your notes are "
+            "found automatically."
+        )
     if st.button("Build the study document", type="primary"):
         try:
             run_id, stream = shelf.start(course, lecture)
@@ -400,6 +406,8 @@ def finished(shelf: Library, run_id: str) -> None:
     st.html(to_html(markdown, title=record.chapter, highlight=highlight))
 
     outcome = shelf.runner.state(run_id).get("retrieval") or RetrievalOutcome()
+    if outcome.auto_scoped and outcome.chapters:
+        st.caption(f"Textbook chapters matched to your notes: {', '.join(outcome.chapters)}")
     with st.expander("What the textbook gate rejected"):
         st.markdown(provenance_report(record.course, record.chapter, outcome))
 
