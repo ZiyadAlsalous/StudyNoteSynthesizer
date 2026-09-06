@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 
 from .config import Settings
@@ -274,7 +274,6 @@ class SlideIngestor:
     def __init__(self, settings: Settings, client: LlmClient) -> None:
         self._settings = settings
         self._client = client
-        self._prompts = PromptLibrary(settings.prompts_dir)
 
     def ingest(self, source: Path) -> list[SlidePage]:
         if source.is_dir():
@@ -325,27 +324,6 @@ class SlideIngestor:
             markdown=f"## Page {number}\n\n{text.strip()}",
             is_figure_only=sparse,
         )
-
-    def describe_figures(self, pages: Sequence[SlidePage], images: Path) -> list[SlidePage]:
-        """Diagram-only pages get a vision pass. Pure text extraction throws
-        away most of what a slide diagram means."""
-        prompt = self._prompts.render("describe_figure")
-        described: list[SlidePage] = []
-        for page in pages:
-            image = images / f"page{page.page:03d}.png"
-            if not page.is_figure_only or not image.exists():
-                described.append(page)
-                continue
-            description = self._client.vision(prompt, image, job="describe_figure")
-            described.append(
-                page.model_copy(
-                    update={
-                        "figure_description": description,
-                        "markdown": f"{page.markdown}\n\n[diagram: {description.strip()}]",
-                    }
-                )
-            )
-        return described
 
 
 class NoteIngestor:

@@ -15,7 +15,7 @@ from pathlib import Path
 from jinja2 import Environment, StrictUndefined
 from markdown_it import MarkdownIt
 
-from .models import Rejection, RetrievalOutcome, Source
+from .models import RetrievalOutcome
 
 TEXTBOOK_TAG = re.compile(r"\[C: pages (\d+)-(\d+)\]")
 CHECK_THIS = re.compile(r"\*\*Check this:\*\*")
@@ -126,24 +126,3 @@ def provenance_report(course: str, chapter: str, outcome: RetrievalOutcome) -> s
         outcome=outcome,
         by_mechanism=sorted(counts.items()),
     )
-
-
-def source_counts(markdown: str) -> dict[Source, int]:
-    """Rough share of the document by source, for the bloat metric."""
-    textbook_chars = sum(
-        len(block) for block in re.findall(r"\[C: pages \d+-\d+\](.*?)(?:\n\n|$)", markdown, re.S)
-    )
-    return {
-        Source.TEXTBOOK: textbook_chars,
-        Source.SLIDES: max(0, len(markdown) - textbook_chars),
-    }
-
-
-def rejection_table(rejections: list[Rejection]) -> str:
-    rows = ["| candidate | mechanism | reason | score | detail |", "|---|---|---|---|---|"]
-    for item in rejections:
-        score = "" if item.score is None else f"{item.score:.2f}"
-        rows.append(
-            f"| {item.candidate_id} | {item.mechanism} | {item.reason.value} | {score} | {item.detail} |"
-        )
-    return "\n".join(rows)

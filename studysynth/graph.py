@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 
 from .config import Settings
 from .embeddings import EmbeddingBackend
-from .ingest import NoteIngestor, SlideIngestor, estimate_tokens
+from .ingest import NoteIngestor, SlideIngestor
 from .llm import LlmClient, PromptLibrary
 from .models import (
     Concept,

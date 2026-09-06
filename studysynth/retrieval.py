@@ -14,7 +14,7 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 from .config import Settings
-from .embeddings import EmbeddingBackend, cosine
+from .embeddings import EmbeddingBackend
 from .ingest import estimate_tokens
 from .llm import LlmClient, PromptLibrary
 from .models import (
