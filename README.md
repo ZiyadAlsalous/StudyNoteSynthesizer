@@ -144,9 +144,6 @@ STUDYSYNTH_LLM__BACKEND=mock STUDYSYNTH_EMBEDDINGS__BACKEND=mock python -m study
 # Checks
 pytest              # 37 tests: the seven controls, a full mock run, persistence
 mypy --strict       # clean across 14 modules
-
-# Evaluate a finished document against a labelled chapter
-python -m studysynth.evaluate --labels labels.json --document out.md
 ```
 
 ## 📂 Repository Structure
@@ -171,7 +168,6 @@ studysynth/
 │   │   └── render.py        #   Markdown → HTML/PDF, provenance tags
 │   ├── services.py          # Everything the interface calls, wired once
 │   ├── ui.py                # The whole interface: home · course · lecture
-│   ├── evaluate.py          # Offline eval: coverage, bloat rate, citation validity
 │   └── prompts/             # Every prompt as Markdown. Never inlined in Python.
 ├── fixtures/llm/            # Recorded responses, so tests run offline and free
 ├── tests/                   # 37 tests
@@ -193,7 +189,8 @@ GitHub.
 - [ ] A layout-aware parser, so structural chunking sees real headings instead of
       the flat text `pypdf` returns
 - [ ] Re-tune the novelty threshold against Qwen rather than the lexical mock
-- [ ] Build a labelled chapter and publish the eval numbers
+- [ ] An offline eval: coverage, bloat rate and citation validity against a
+      hand-labelled chapter
 
 ## 📫 Contact
 

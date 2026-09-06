@@ -213,7 +213,7 @@ where it stopped rather than re-transcribing.
 
 ## 10. Evaluation
 
-`evaluate.py`, run from the command line against a labeled chapter:
+Not built yet. When it is, run from the command line against a labeled chapter:
 
 - **Coverage** — fraction of slide concepts present in the document.
 - **Bloat rate** — admitted textbook tokens over total document tokens, against
