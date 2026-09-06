@@ -38,11 +38,24 @@ class StubLlm(LlmClient):
         return self.verdicts.get(job, {}).get(image.name, "")
 
 
+def mock_settings(tmp_path: Path) -> Settings:
+    """Settings with .env ignored and both backends pinned to mock.
+
+    Without `_env_file=None` a developer's real .env selects the Claude
+    backend and the suite starts making paid API calls.
+    """
+    loaded = Settings(_env_file=None)
+    loaded.paths.root = tmp_path
+    loaded.llm.backend = "mock"
+    loaded.llm.fixtures = Path("fixtures/llm")
+    loaded.embeddings.backend = "mock"
+    loaded.anthropic_api_key = None
+    return loaded.validated()
+
+
 @pytest.fixture
 def settings(tmp_path: Path) -> Settings:
-    loaded = Settings()
-    loaded.paths.root = tmp_path
-    return loaded.validated()
+    return mock_settings(tmp_path)
 
 
 @pytest.fixture

@@ -19,6 +19,7 @@ from studysynth.models import ChapterRange, Reason
 from studysynth.retrieval import TextbookGate
 from studysynth.store import Catalogue, Places, VectorStore
 
+from .conftest import mock_settings
 from .samples import write_pdf, write_png
 
 TEXTBOOK = [
@@ -82,10 +83,7 @@ SLIDES = [
 
 @pytest.fixture
 def project(tmp_path: Path) -> dict[str, object]:
-    settings = Settings()
-    settings.paths.root = tmp_path
-    settings.llm.fixtures = Path("fixtures/llm")
-    settings = settings.validated()
+    settings = mock_settings(tmp_path)
 
     catalogue = Catalogue(settings.paths.catalogue)
     places = Places(settings)

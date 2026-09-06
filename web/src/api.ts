@@ -1,6 +1,8 @@
 import type { ChapterRange, Course, NotePage, Progress, RunRecord } from "./types";
 
-const base = "/api";
+// Vite proxies /api to the backend in development; in production the
+// API serves this bundle itself, so paths are same-origin.
+const base = import.meta.env.DEV ? "/api" : "";
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${base}${path}`, {

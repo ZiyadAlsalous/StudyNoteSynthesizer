@@ -101,7 +101,7 @@ def test_a_single_over_long_line_splits_at_sentence_ends():
 
 
 def test_parents_and_children_respect_the_configured_limits(nested_textbook):
-    settings = Settings()
+    settings = Settings(_env_file=None)
     parents, chunks = TextbookIngestor(settings).ingest(
         nested_textbook, "cs3340", chapter_ranges(nested_textbook)
     )

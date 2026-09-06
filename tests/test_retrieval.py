@@ -88,7 +88,7 @@ def test_necessity_is_graded_against_the_draft_not_the_gap_alone(settings, embed
 def test_necessity_bar_cannot_be_looser_than_relevance():
     from studysynth.config import ConfigError
 
-    loose = Settings()
+    loose = Settings(_env_file=None)
     loose.retrieval.min_necessity = 0.1
     loose.retrieval.min_relevance = 0.5
     with pytest.raises(ConfigError):
