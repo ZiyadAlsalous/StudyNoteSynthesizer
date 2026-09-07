@@ -115,7 +115,7 @@ Every threshold lives in `studysynth/config.py`. Changing the textbook budget is
 **1. Clone**
 
 ```bash
-git clone https://github.com/<your-username>/study-note-synthesizer.git
+git clone https://github.com/ZiyadAlsalous/study-note-synthesizer.git
 cd study-note-synthesizer
 ```
 
