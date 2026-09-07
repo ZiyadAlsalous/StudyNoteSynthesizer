@@ -170,7 +170,7 @@ ruff check .   # lint
 
 ```
 StudyNoteSynthesizer/
-├── src/studysynth/
+├── studysynth/
 │   ├── __main__.py          # Entry point, launches the interface
 │   ├── config.py            # Every tunable threshold. One place.
 │   ├── models.py            # Domain types. No logic.
