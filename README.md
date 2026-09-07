@@ -1,4 +1,4 @@
-# 📚 Study Note Synthesizer
+# Study Note Synthesizer
 
 **Your handwritten lecture notes, completed against your professor's slides, with the course textbook allowed in only where they leave a real gap.**
 
@@ -22,20 +22,20 @@ So seven separate mechanisms stand between the textbook and the output. Every re
 
 Everything runs on your own machine with your own API key. Your notes never leave it except as prompts you can read.
 
-## ✨ Features
+## Features
 
 - **Three ranked sources.** The slides are authoritative because the professor sets the exam. Your notes add intuition and worked reasoning. The textbook is a gap filler that never sets scope.
 - **Disagreements surfaced, not corrected.** Where your notes and the slides conflict on a fact, both appear inline under a **Check this:** marker. You need to see what you misunderstood.
 - **Seven anti-bloat controls.** The product, described under Architecture.
-- **📝 Human review interrupt.** The graph stops after OCR so you can fix the transcription beside the page it came from, because handwriting is the least reliable thing the system reads.
-- **♻️ Crash-resumable runs.** A SQLite checkpointer means a failed run resumes at the node that failed instead of re-transcribing everything.
-- **🔢 Typeset mathematics.** LaTeX is preserved from OCR all the way through, then rendered by pandoc and a TeX engine, so the PDF shows real summations and fractions rather than `$` and backslashes.
-- **💾 The textbook is embedded once.** Parsed, chunked and written to an on-disk vector index per course. Later runs query that index rather than re-embedding the book.
-- **🎨 Provenance on every passage.** A toggle colours the document by source, and every run keeps a report of what the gate rejected and why.
-- **📄 Prompts are files, not code.** All nine live in `studysynth/prompts/` as Markdown you can edit without touching Python.
-- **🔌 Runs offline for development.** A mock backend replays recorded fixtures, so the whole pipeline and all 54 tests run with no API key and no cost.
+- **Human review interrupt.** The graph stops after OCR so you can fix the transcription beside the page it came from, because handwriting is the least reliable thing the system reads.
+- **Crash-resumable runs.** A SQLite checkpointer means a failed run resumes at the node that failed instead of re-transcribing everything.
+- **Typeset mathematics.** LaTeX is preserved from OCR all the way through, then rendered by pandoc and a TeX engine, so the PDF shows real summations and fractions rather than `$` and backslashes.
+- **The textbook is embedded once.** Parsed, chunked and written to an on-disk vector index per course. Later runs query that index rather than re-embedding the book.
+- **Provenance on every passage.** A toggle colours the document by source, and every run keeps a report of what the gate rejected and why.
+- **Prompts are files, not code.** All nine live in `studysynth/prompts/` as Markdown you can edit without touching Python.
+- **Runs offline for development.** A mock backend replays recorded fixtures, so the whole pipeline and all 54 tests run with no API key and no cost.
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 Slides (PDF/PPTX)          Note photos            Textbook (PDF, optional)
@@ -92,7 +92,7 @@ Each mechanism rejects, and each rejection is logged with its score.
 
 Every threshold lives in `studysynth/config.py`. Changing the textbook budget is one line in one place.
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 **Core:** Python 3.12 · Pydantic v2 · `mypy --strict` · `ruff`
 
@@ -110,7 +110,7 @@ Every threshold lives in `studysynth/config.py`. Changing the textbook budget is
 
 **Interface:** Streamlit, three screens, no build step
 
-## 🚀 Getting Started
+## Getting Started
 
 **1. Clone**
 
@@ -166,7 +166,7 @@ mypy           # strict, 19 modules
 ruff check .   # lint
 ```
 
-## 📂 Repository Structure
+## Repository Structure
 
 ```
 StudyNoteSynthesizer/
@@ -196,7 +196,7 @@ StudyNoteSynthesizer/
 
 Everything you upload and everything the app produces lives under `data/`: the SQLite catalogue, the vector index, your files, and one folder per run holding its PDF, its Markdown and its provenance report. `data/` and `.env` are both gitignored, so your notes and your key never reach GitHub.
 
-## 🗺️ Roadmap
+## Roadmap
 
 - [ ] Prompt caching on the graders, where the drafted chapter is identical across every candidate in a run
 - [ ] Per-job token accounting, so cost per run is measured rather than estimated
@@ -204,7 +204,7 @@ Everything you upload and everything the app produces lives under `data/`: the S
 - [ ] A layout-aware parser, so structural chunking sees real headings instead of the flat text `pypdf` returns
 - [ ] An offline eval: coverage, bloat rate and citation validity against a hand-labelled chapter
 
-## 📫 Contact
+## Contact
 
 Built by **Ziyad Alsalous**
 
