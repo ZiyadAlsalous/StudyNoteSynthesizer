@@ -30,6 +30,7 @@ _FORMULA_FENCE = re.compile(r"\$\$")
 
 
 _CHARS_PER_TOKEN = 4
+_OVERSHOOT = 2
 
 
 def estimate_tokens(text: str) -> int:
@@ -133,12 +134,21 @@ class TextbookIngestor:
         return [page.extract_text() or "" for page in reader.pages]
 
     def _sections(self, body: str, course: str, span: ChapterRange) -> list[Parent]:
-        """Split on headings first, then size, never inside a table or formula."""
+        """Split on headings first, then size, never inside a table or formula.
+
+        Whatever precedes the first heading is a block of its own under the
+        chapter title. It is usually the chapter introduction, where a textbook
+        tends to put the definitions the rest of the chapter assumes.
+        """
         marks = list(_HEADING.finditer(body))
+        title = span.title or span.chapter
         if not marks:
-            blocks = [(span.title or span.chapter, body)]
+            blocks = [(title, body)]
         else:
             blocks = []
+            lead = body[: marks[0].start()]
+            if lead.strip():
+                blocks.append((title, lead))
             for index, mark in enumerate(marks):
                 start = mark.end()
                 stop = marks[index + 1].start() if index + 1 < len(marks) else len(body)
@@ -167,8 +177,15 @@ class TextbookIngestor:
 
     @staticmethod
     def _split_to_size(text: str, limit: int) -> list[str]:
-        """Split text so no piece exceeds `limit` tokens."""
+        """Split text into pieces of at most `limit` tokens.
+
+        A formula or a table is kept whole even when that overshoots, because a
+        half formula is worse than a long chunk. `_OVERSHOOT` bounds how far
+        that may go, so malformed input such as a `$$` the extractor never
+        closed cannot swallow the rest of the text into one piece.
+        """
         budget = limit * _CHARS_PER_TOKEN
+        ceiling = budget * _OVERSHOOT
         if len(text) <= budget:
             return [text]
 
@@ -184,15 +201,22 @@ class TextbookIngestor:
                 current, size = [], 0
 
         for line in text.splitlines(keepends=True):
-            was_in_formula = in_formula
-            if _FORMULA_FENCE.search(line):
+            fences = len(_FORMULA_FENCE.findall(line))
+            formula = in_formula or fences > 0
+            if fences % 2:
                 in_formula = not in_formula
-            breakable = not was_in_formula and not _TABLE_ROW.match(line)
+            elif not line.strip():
+                in_formula = False
+            breakable = not formula and not _TABLE_ROW.match(line)
+            splittable = not formula or len(line) > ceiling
             parts = (
-                TextbookIngestor._sentences(line, budget) if len(line) > budget else [line]
+                TextbookIngestor._sentences(line, budget)
+                if len(line) > budget and splittable
+                else [line]
             )
             for part in parts:
-                if size + len(part) > budget and current and breakable:
+                over = size + len(part)
+                if current and (over > ceiling or (over > budget and breakable)):
                     flush()
                 current.append(part)
                 size += len(part)

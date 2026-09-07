@@ -12,6 +12,7 @@ import pypdf
 import pytest
 
 from studysynth.config import Settings
+from studysynth.models import ChapterRange
 from studysynth.pipeline.ingest import TextbookIngestor, chapter_ranges, estimate_tokens
 
 from .samples import write_pdf
@@ -86,11 +87,52 @@ def test_splitter_stays_within_the_limit_across_many_lines():
         assert max(estimate_tokens(p) for p in pieces) <= limit, f"overflow at limit {limit}"
 
 
-def test_splitter_never_breaks_inside_a_display_formula():
+def test_splitter_keeps_a_display_formula_whole():
     body = "prose line\n" * 10 + "$$\n" + "a + b = c\n" * 40 + "$$\n" + "more prose\n" * 10
-    pieces = TextbookIngestor._split_to_size(body, 40)
+    pieces = TextbookIngestor._split_to_size(body, 320)
     for piece in pieces:
         assert piece.count("$$") % 2 == 0, "a formula was split across two chunks"
+
+
+def test_text_before_the_first_heading_is_kept(settings):
+    """A chapter introduction sits above the first heading, and the heading
+    split used to start at the first mark and discard everything before it."""
+    intro = "This chapter introduces induction, the idea the unit rests on. " * 6
+    rest = "Content under the first heading, explained at some length. " * 6
+    span = ChapterRange(chapter="c1", title="Chapter 1", page_start=1, page_end=2)
+
+    parents = TextbookIngestor(settings)._sections(
+        f"{intro}\n\n# First heading\n\n{rest}", "cs", span
+    )
+
+    kept = " ".join(parent.text for parent in parents)
+    assert "introduces induction" in kept, "the chapter introduction was dropped"
+    assert "Chapter 1" in [parent.heading for parent in parents]
+
+
+def test_a_body_that_opens_on_a_heading_gains_no_empty_section(settings):
+    rest = "Content under the first heading, explained at some length. " * 6
+    span = ChapterRange(chapter="c1", title="Chapter 1", page_start=1, page_end=2)
+
+    parents = TextbookIngestor(settings)._sections(f"\n\n# First heading\n\n{rest}", "cs", span)
+
+    assert [parent.heading for parent in parents] == ["First heading"]
+
+
+def test_a_formula_written_on_one_line_does_not_latch_the_splitter():
+    """Both fences on a single line toggled the state once, leaving every later
+    line unbreakable, so the rest of the chapter became one oversized chunk."""
+    body = "prose line. " * 40 + "\n$$a + b = c.$$\n" + "more prose. " * 200
+    pieces = TextbookIngestor._split_to_size(body, 50)
+    assert max(estimate_tokens(piece) for piece in pieces) <= 100
+
+
+def test_an_unclosed_formula_cannot_swallow_the_rest_of_the_text():
+    """An extractor that drops a closing fence must cost one long chunk, not
+    every chunk after it."""
+    body = "prose line. " * 40 + "\n$$\na + b = c.\n" + "more prose. " * 200
+    pieces = TextbookIngestor._split_to_size(body, 50)
+    assert max(estimate_tokens(piece) for piece in pieces) <= 100
 
 
 def test_a_single_over_long_line_splits_at_sentence_ends():
