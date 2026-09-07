@@ -3,10 +3,7 @@ __pycache__/
 *.pyc
 .mypy_cache/
 .pytest_cache/
+.ruff_cache/
 .env
 data/
-demo/out/
-web/node_modules/
-web/dist/
 .DS_Store
-web/tsconfig.tsbuildinfo

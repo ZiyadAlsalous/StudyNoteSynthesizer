@@ -8,8 +8,8 @@ from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from ..config import Settings
 from ..clients.llm import LlmClient, PromptLibrary
+from ..config import Settings
 from ..models import ChapterRange, Chunk, ChunkType, NotePage, Parent, SlidePage
 from ..store import Places
 
@@ -24,7 +24,6 @@ class OutlineMissing(IngestError):
 
 _HEADING = re.compile(r"^(#{1,4})\s+(.*)$", re.MULTILINE)
 _TABLE_ROW = re.compile(r"^\s*\|", re.MULTILINE)
-# `4 Divide-and-Conquer` but not `4.1 Multiplying matrices`.
 _CHAPTER_NUMBER = re.compile(r"^\d+\s+\S")
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
 _FORMULA_FENCE = re.compile(r"\$\$")
@@ -58,7 +57,6 @@ def chapter_ranges(pdf: Path, level: int | None = None) -> list[ChapterRange]:
     for index, (own_depth, title, start) in enumerate(entries):
         if own_depth != depth:
             continue
-        # A chapter ends at the next entry of its level, not at its own first subsection.
         end = total
         for later_depth, _, later_start in entries[index + 1 :]:
             if later_depth <= depth:
@@ -186,13 +184,10 @@ class TextbookIngestor:
                 current, size = [], 0
 
         for line in text.splitlines(keepends=True):
-            # Decided against the state *before* this line's fence: the line that closes a form.
             was_in_formula = in_formula
             if _FORMULA_FENCE.search(line):
                 in_formula = not in_formula
-            # Extracted PDF text often has no blank lines at all, so breaking only on paragraph.
             breakable = not was_in_formula and not _TABLE_ROW.match(line)
-            # A single line can be longer than the whole budget; sentence ends are the only rem.
             parts = (
                 TextbookIngestor._sentences(line, budget) if len(line) > budget else [line]
             )
@@ -329,7 +324,6 @@ class NoteIngestor:
                 page=number, image_path=str(image), content_hash=digest, markdown=markdown
             )
 
-        # A thirty-page export is thirty independent vision calls.
         workers = min(self._settings.notes.max_parallel_ocr, len(images))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             return list(pool.map(transcribe, enumerate(images, start=1)))
@@ -357,7 +351,6 @@ class NoteIngestor:
         with pymupdf.open(str(pdf)) as document:  # type: ignore[no-untyped-call]
             for number, page in enumerate(document, start=1):
                 out = target / f"{pdf.stem}-page{number:04d}.png"
-                # Re-rendering an unchanged page is wasted work and wasted battery.
                 if not out.exists():
                     page.get_pixmap(matrix=matrix).save(str(out))
                 rendered.append(out)

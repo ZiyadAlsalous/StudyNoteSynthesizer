@@ -8,10 +8,9 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 from pydantic import BaseModel, Field
 
-from ..config import Settings
 from ..clients.embeddings import EmbeddingBackend
-from .ingest import estimate_tokens
 from ..clients.llm import LlmClient, PromptLibrary
+from ..config import Settings
 from ..models import (
     Admitted,
     Candidate,
@@ -23,6 +22,7 @@ from ..models import (
     RetrievalOutcome,
 )
 from ..store import Catalogue, VectorStore
+from .ingest import estimate_tokens
 
 
 class RelevanceVerdict(BaseModel):
@@ -62,7 +62,9 @@ class TextbookGate:
         self._prompts = PromptLibrary(settings.prompts_dir)
 
     def _grade(
-        self, candidates: Sequence[Candidate], judge: Callable[[Candidate], tuple[Candidate | None, Rejection | None]]
+        self,
+        candidates: Sequence[Candidate],
+        judge: Callable[[Candidate], tuple[Candidate | None, Rejection | None]],
     ) -> Survivors:
         """Run a grader over every candidate at once, then restore their order.
 
@@ -78,7 +80,6 @@ class TextbookGate:
         rejected = [rejection for _, rejection in verdicts if rejection is not None]
         return kept, rejected
 
-    # 7.1 gap-triggered querying ------------------------------------------------
 
     def retrieve(
         self, course: str, chapter: str, gaps: Sequence[Gap], chapters: Sequence[str] | None = None
@@ -99,6 +100,7 @@ class TextbookGate:
                         gap_id=gap.id,
                         parent_id=parent.id,
                         text=parent.text,
+                        child_text=str(payload.get("text", "")),
                         section_path=parent.section_path,
                         page_start=parent.page_start,
                         page_end=parent.page_end,
@@ -119,13 +121,9 @@ class TextbookGate:
                 best[candidate.parent_id] = candidate
         return sorted(best.values(), key=lambda c: -c.retrieval_score)
 
-    # 7.2 chapter scoping -------------------------------------------------------
 
     def detect_chapters(self, course: str, gaps: Sequence[Gap]) -> list[str]:
         """Which chapters the notes are about, decided by the gaps themselves."""
-        # A student should not have to know their induction lecture is chapter 4.
-        # One unscoped probe finds where the answers live; the real per-gap
-        # queries are then scoped to those chapters as usual.
         if not gaps:
             return []
         weight: dict[str, float] = {}
@@ -148,8 +146,7 @@ class TextbookGate:
         if chapter not in ordered:
             return [chapter]
         index = ordered.index(chapter)
-        window = ordered[max(0, index - 1) : index + 2]
-        return window
+        return ordered[max(0, index - 1) : index + 2]
 
     def check_scope(self, candidates: Sequence[Candidate], allowed: Sequence[str]) -> Survivors:
         """Belt and braces: the index filter should make this a no-op."""
@@ -169,7 +166,6 @@ class TextbookGate:
                 )
         return kept, rejected
 
-    # 7.3 relevance grading -----------------------------------------------------
 
     def grade_relevance(self, candidates: Sequence[Candidate], gaps: Sequence[Gap]) -> Survivors:
         """Graded by the index first, then by a model.
@@ -199,7 +195,7 @@ class TextbookGate:
                 "grade_relevance",
                 {
                     "question": questions.get(candidate.gap_id, ""),
-                    "passage": candidate.text,
+                    "passage": candidate.child_text or candidate.text,
                     "page_start": candidate.page_start,
                     "page_end": candidate.page_end,
                 },
@@ -223,7 +219,6 @@ class TextbookGate:
         kept, rejected = self._grade(candidates, judge)
         return kept, cheap + rejected
 
-    # 7.4 necessity grading -----------------------------------------------------
 
     def grade_necessity(
         self,
@@ -262,7 +257,6 @@ class TextbookGate:
 
         return self._grade(candidates, judge)
 
-    # 7.5 novelty filter --------------------------------------------------------
 
     def filter_novel(
         self, candidates: Sequence[Candidate], drafts: Sequence[DraftedConcept]
@@ -294,7 +288,6 @@ class TextbookGate:
                 )
         return kept, rejected
 
-    # 7.6 new-concept guard -----------------------------------------------------
 
     def guard_new_concepts(
         self, candidates: Sequence[Candidate], concepts: Sequence[Concept]
@@ -324,7 +317,6 @@ class TextbookGate:
 
         return self._grade(candidates, judge)
 
-    # 7.7 budget enforcement ----------------------------------------------------
 
     def budget_for(self, document_tokens: int) -> int:
         """The binding constraint, whichever of the two ceilings is tighter."""
@@ -371,7 +363,6 @@ class TextbookGate:
             )
         return admitted, rejected, spent, budget
 
-    # the whole gate ------------------------------------------------------------
 
     def run(
         self,

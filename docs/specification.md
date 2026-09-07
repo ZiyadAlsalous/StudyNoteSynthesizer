@@ -1,8 +1,7 @@
-# Study Note Synthesizer — Specification
+# Study Note Synthesizer: Specification
 
-Status: reconstructed 2026-09-05 from `claude-code-prompt.md` and the working
-prototype at `~/Desktop/studentAdvisor`. Section 7 thresholds are proposals.
-Change them here first; code reads them from `config.py`, never inline.
+Every threshold in section 7 lives in `studysynth/config.py` and is read from
+there, never inlined at a call site. Change a number here first, then in config.
 
 ## 1. Purpose
 

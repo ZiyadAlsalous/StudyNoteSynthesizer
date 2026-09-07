@@ -1,0 +1,26 @@
+@page {
+    size: A4;
+    margin: 22mm 18mm;
+    @bottom-center { content: counter(page); }
+}
+body { font: 11pt/1.5 Georgia, serif; color: #1a1a1a; }
+h1 { font-size: 20pt; border-bottom: 2px solid #1a1a1a; padding-bottom: 4pt; }
+h2 { font-size: 14pt; margin-top: 18pt; }
+h3 { font-size: 12pt; }
+blockquote {
+    border-left: 3px solid #999;
+    margin-left: 0;
+    padding-left: 12pt;
+    color: #444;
+}
+.src-c {
+    background: #fff6e0;
+    border-left: 3px solid #d99b00;
+    padding: 2pt 6pt;
+    display: inline-block;
+}
+.src-c .ref { font-size: 8pt; color: #8a6400; letter-spacing: .04em; }
+.check { background: #ffecec; border-left: 3px solid #c0392b; padding: 2pt 6pt; }
+.plain .src-c, .plain .check { background: none; border-left: none; padding: 0; }
+table { border-collapse: collapse; }
+td, th { border: 1px solid #bbb; padding: 3pt 6pt; }

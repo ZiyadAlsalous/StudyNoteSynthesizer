@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from studysynth.config import Settings
 from studysynth.clients.embeddings import MockEmbeddings
+from studysynth.config import Settings
 from studysynth.models import Reason
 from studysynth.pipeline.retrieval import TextbookGate
 
@@ -17,18 +17,14 @@ from .conftest import StubLlm, make_candidate, make_concept, make_draft, make_ga
 
 
 def gate(settings: Settings, llm: StubLlm, embeddings: MockEmbeddings) -> TextbookGate:
-    return TextbookGate(settings, llm, embeddings, vectors=None, catalogue=None)  # type: ignore[arg-type]
+    return TextbookGate(settings, llm, embeddings, vectors=None, catalogue=None)
 
-
-# 7.1 gap-triggered querying ---------------------------------------------------
 
 def test_no_gaps_means_the_textbook_is_never_read(settings, embeddings):
     llm = StubLlm()
     assert gate(settings, llm, embeddings).retrieve("cs3340", "induction", []) == []
     assert llm.jobs == []
 
-
-# 7.2 chapter scoping ----------------------------------------------------------
 
 def test_scope_rejects_a_passage_from_another_chapter(settings, embeddings):
     candidates = [make_candidate("a", chapter="induction"), make_candidate("b", chapter="graphs")]
@@ -55,7 +51,7 @@ class StubVectors:
 
 
 def auto_gate(settings, vectors, embeddings):
-    return TextbookGate(settings, StubLlm(), embeddings, vectors, catalogue=None)  # type: ignore[arg-type]
+    return TextbookGate(settings, StubLlm(), embeddings, vectors, catalogue=None)
 
 
 def test_chapters_are_detected_from_the_gaps_when_none_is_pinned(settings, embeddings):
@@ -84,8 +80,6 @@ def test_detection_does_nothing_without_a_gap(settings, embeddings):
     assert vectors.filters == []
 
 
-# 7.3 relevance grading --------------------------------------------------------
-
 def test_relevance_drops_a_topical_near_miss(settings, embeddings):
     llm = StubLlm({"grade_relevance": {
         "a": {"score": 0.91, "reason": "answers it"},
@@ -102,11 +96,11 @@ def test_relevance_drops_a_topical_near_miss(settings, embeddings):
 
 def test_relevance_threshold_is_inclusive_at_the_configured_value(settings, embeddings):
     llm = StubLlm({"grade_relevance": {"a": {"score": settings.retrieval.min_relevance}}})
-    kept, rejected = gate(settings, llm, embeddings).grade_relevance([make_candidate("a")], [make_gap()])
+    kept, rejected = gate(settings, llm, embeddings).grade_relevance(
+        [make_candidate("a")], [make_gap()]
+    )
     assert len(kept) == 1 and not rejected
 
-
-# 7.4 necessity grading --------------------------------------------------------
 
 def test_necessity_rejects_relevant_prose_the_student_already_has(settings, embeddings):
     llm = StubLlm({"grade_necessity": {
@@ -137,8 +131,6 @@ def test_necessity_bar_cannot_be_looser_than_relevance():
         loose.validated()
 
 
-# 7.5 novelty filter -----------------------------------------------------------
-
 def test_novelty_drops_a_restatement_of_drafted_content(settings, embeddings):
     body = "Strong induction assumes the property for every value below n."
     kept, rejected = gate(settings, StubLlm(), embeddings).filter_novel(
@@ -162,8 +154,6 @@ def test_novelty_is_a_no_op_before_anything_is_drafted(settings, embeddings):
     kept, rejected = gate(settings, StubLlm(), embeddings).filter_novel([make_candidate("a")], [])
     assert len(kept) == 1 and not rejected
 
-
-# 7.6 new-concept guard --------------------------------------------------------
 
 def test_guard_rejects_a_passage_that_introduces_an_off_syllabus_term(settings, embeddings):
     llm = StubLlm({"new_concept_guard": {"a": {"terms": ["well-ordering principle"]}}})
@@ -192,13 +182,9 @@ def test_guard_can_be_disabled_only_from_config(settings, embeddings):
     assert len(kept) == 1 and not rejected and llm.jobs == []
 
 
-# 7.7 budget enforcement -------------------------------------------------------
-
 def test_budget_is_the_tighter_of_the_absolute_cap_and_the_fraction(settings, embeddings):
     engine = gate(settings, StubLlm(), embeddings)
-    # A thin draft: the 15% fraction binds well below the 1200 token cap.
     assert engine.budget_for(1000) == int(0.15 * 1000 / 0.85)
-    # A long draft: the absolute cap binds.
     assert engine.budget_for(100_000) == settings.retrieval.textbook_token_budget
 
 

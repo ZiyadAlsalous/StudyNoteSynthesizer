@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "studysynth"
 version = "0.1.0"
@@ -24,6 +28,12 @@ claude = ["anthropic>=0.30"]
 qwen = ["sentence-transformers>=3.0"]
 dev = ["pytest>=8.2", "mypy>=1.10", "ruff>=0.5"]
 
+[tool.setuptools.packages.find]
+include = ["studysynth*"]
+
+[tool.setuptools.package-data]
+studysynth = ["prompts/*.md", "templates/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
@@ -36,3 +46,10 @@ files = ["studysynth"]
 module = ["qdrant_client.*", "pypdf.*", "pptx.*", "pymupdf.*", "langgraph.*",
           "sentence_transformers.*", "anthropic.*", "markdown_it.*", "streamlit.*"]
 ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM", "PIE", "RET", "PTH"]

@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Iterator, cast
+from pathlib import Path
+from typing import Any, cast
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
-from ..config import Settings
 from ..clients.embeddings import EmbeddingBackend
-from .ingest import NoteIngestor, SlideIngestor
 from ..clients.llm import LlmClient, PromptLibrary
+from ..config import Settings
 from ..models import (
     Concept,
     DraftedConcept,
@@ -25,8 +24,9 @@ from ..models import (
     RetrievalOutcome,
     Source,
 )
-from .retrieval import TextbookGate
 from ..store import Catalogue, Places
+from .ingest import NoteIngestor, SlideIngestor
+from .retrieval import TextbookGate
 
 INGEST_SLIDES = "ingest_slides"
 INGEST_NOTES = "ingest_notes"
@@ -113,17 +113,33 @@ class Nodes:
     def draft_concepts(self, state: GraphState) -> dict[str, Any]:
         """Drafted from slides and notes only."""
         slides = {page.page: page.markdown for page in state.get("slides", [])}
-        notes = _join(page.markdown for page in note_pages(state))
+        notes = {page.page: page.markdown for page in note_pages(state)}
+
+        def notes_for(concept: Concept) -> str:
+            """Only the note pages the extractor mapped to this concept.
+
+            Sending every page to all fifteen drafts put the whole notebook in
+            the prompt fifteen times. `note_pages` is what extract_concepts
+            recorded it for. Fall back to the whole notebook when the extractor
+            said the notes cover this concept but named no pages, so a thin
+            mapping never silently loses the student's own work.
+            """
+            if concept.note_pages:
+                return _join(notes.get(page, "") for page in concept.note_pages)
+            return _join(notes.values()) if concept.covered_by_notes else ""
+
         def draft(concept: Concept) -> DraftedConcept:
             prompt = self._prompts.render(
                 "draft_concept",
                 {
                     "name": concept.name,
                     "slides": _join(slides.get(page, "") for page in concept.slide_pages),
-                    "notes": notes,
+                    "notes": notes_for(concept),
                 },
             )
-            body = self._llm.complete(prompt, job="draft_concept")
+            body = self._llm.complete(
+                prompt, job="draft_concept", effort=self._settings.llm.draft_effort
+            )
             pages = ", ".join(str(page) for page in concept.slide_pages)
             return DraftedConcept(
                 concept_id=concept.id,
@@ -176,12 +192,14 @@ class Nodes:
             for concept in state.get("concepts", [])
             if not concept.covered_by_notes
         ]
+        unverified = state.get("unverified", []) if state.get("verify_rounds") else []
         prompt = self._prompts.render(
             "synthesize_chapter",
             {
                 "chapter": state["chapter"],
                 "sections": _join(sections),
                 "uncovered": _join(f"- {name}" for name in uncovered),
+                "unverified": _join(f"- {claim}" for claim in unverified),
             },
         )
         return {"document": self._llm.complete(prompt, job="synthesize_chapter")}
@@ -195,10 +213,20 @@ class Nodes:
             },
         )
         verdict = self._llm.structured(prompt, VerifyVerdict, job="verify_claims")
-        return {
+        rounds = state.get("verify_rounds", 0) + 1
+        update: dict[str, Any] = {
             "unverified": verdict.unverified,
-            "verify_rounds": state.get("verify_rounds", 0) + 1,
+            "verify_rounds": rounds,
         }
+        final = rounds >= self._settings.verify.max_rounds
+        if verdict.unverified and final and self._settings.verify.drop_unverified:
+            flagged = "\n".join(f"- {claim}" for claim in verdict.unverified)
+            update["document"] = (
+                f"{state.get('document', '')}\n\n"
+                f"## Claims I could not verify\n\n"
+                f"Check these against the slides before you revise them.\n\n{flagged}\n"
+            )
+        return update
 
 
 def note_pages(state: GraphState) -> list[NotePage]:
@@ -262,8 +290,7 @@ class Runner:
             pending = app.get_state(config).next
             payload: dict[str, Any] | None = None if pending else {"run_id": run_id, **inputs}
             for event in app.stream(payload, config, stream_mode="updates"):
-                for node, update in event.items():
-                    yield node, update
+                yield from event.items()
 
     def state(self, run_id: str) -> GraphState:
         with self._saver() as saver:
@@ -286,11 +313,8 @@ class Runner:
             config: RunnableConfig = {"configurable": {"thread_id": run_id}}
             update: dict[str, Any] = {"notes_approved": True}
             if edited is not None:
-                # Store typed objects so every reader after the interrupt gets
-                # the same thing the ingest node produced.
                 update["notes"] = [
                     page if isinstance(page, NotePage) else NotePage.model_validate(page)
                     for page in edited
                 ]
-            # as_node is required: slides and notes ingest in parallel, so LangGraph cannot inf.
             app.update_state(config, update, as_node=INGEST_NOTES)

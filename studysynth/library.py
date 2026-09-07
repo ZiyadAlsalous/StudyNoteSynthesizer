@@ -11,13 +11,13 @@ from typing import Any
 
 from .clients import embeddings as embedding_backends
 from .clients import llm as llm_backends
-from .config import Settings
 from .clients.embeddings import EmbeddingBackend
+from .clients.llm import LlmClient
+from .config import Settings
+from .models import ChapterRange, Lecture, NotePage, RetrievalOutcome, RunRecord
 from .pipeline.graph import EXTRACT_CONCEPTS, Nodes, Runner, note_pages
 from .pipeline.ingest import OutlineMissing, TextbookIngestor, chapter_ranges
-from .clients.llm import LlmClient
-from .models import ChapterRange, Lecture, NotePage, RetrievalOutcome, RunRecord
-from .pipeline.render import provenance_report
+from .pipeline.render import RenderError, provenance_report, to_pdf
 from .pipeline.retrieval import TextbookGate
 from .store import Catalogue, Places, VectorStore
 
@@ -39,6 +39,7 @@ class Library:
     llm: LlmClient
     embeddings: EmbeddingBackend
     runner: Runner = field(init=False)
+    pdf_error: str = field(init=False, default="")
 
     def __post_init__(self) -> None:
         gate = TextbookGate(
@@ -49,7 +50,6 @@ class Library:
         )
         self.runner = Runner(self.settings, nodes)
 
-    # courses ----------------------------------------------------------------
 
     def courses(self) -> list[dict[str, str]]:
         return self.catalogue.courses()
@@ -57,7 +57,6 @@ class Library:
     def add_course(self, course_id: str, title: str) -> None:
         self.catalogue.add_course(course_id, title)
 
-    # textbook ---------------------------------------------------------------
 
     def textbook_status(self, course: str) -> dict[str, object] | None:
         """None when no book is indexed."""
@@ -111,7 +110,6 @@ class Library:
         target.write_bytes(data)
         return target
 
-    # lectures ---------------------------------------------------------------
 
     def lectures(self, course: str) -> list[Lecture]:
         return self.catalogue.lectures(course)
@@ -160,7 +158,6 @@ class Library:
             pdf.unlink(missing_ok=True)
             raise ServiceError(f"{pdf.name} could not be read as a PDF") from error
 
-    # runs -------------------------------------------------------------------
 
     def history(self, course: str, lecture_id: str) -> list[RunRecord]:
         return self.catalogue.runs_for(course, lecture_id)
@@ -211,8 +208,21 @@ class Library:
         self.places.artifact(run_id, "provenance.md").write_text(
             provenance_report(record.course, record.chapter, outcome), encoding="utf-8"
         )
+        try:
+            to_pdf(document, self.places.artifact(run_id, "document.pdf"), self.settings.pdf)
+        except RenderError as error:
+            self.pdf_error = str(error)
+        else:
+            self.pdf_error = ""
         self.catalogue.finish_run(run_id, "done", document_path=str(target))
         return self.catalogue.run(run_id)
+
+    def pdf(self, record: RunRecord) -> bytes:
+        """The typeset document, or empty when it could not be produced."""
+        if not record.document_path:
+            return b""
+        candidate = Path(record.document_path).with_suffix(".pdf")
+        return candidate.read_bytes() if candidate.exists() else b""
 
     def fail(self, run_id: str, error: str) -> None:
         self.catalogue.finish_run(run_id, "failed", error=error)

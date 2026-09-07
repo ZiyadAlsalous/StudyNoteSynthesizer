@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 class StoreError(RuntimeError):
     """Raised when a store operation cannot complete."""
 

@@ -104,7 +104,9 @@ class MockLlm(LlmClient):
         try:
             return schema.model_validate(payload)
         except ValidationError as error:
-            raise LlmError(f"Fixture '{job}' key '{key}' does not match {schema.__name__}") from error
+            raise LlmError(
+                f"Fixture '{job}' key '{key}' does not match {schema.__name__}"
+            ) from error
 
     def vision(self, prompt: str, image: Path, *, job: str) -> str:
         self.calls.append((job, image.name))
@@ -126,7 +128,6 @@ class ClaudeLlm(LlmClient):
 
             key = self._settings.anthropic_api_key
             try:
-                # No key given falls through to the SDK's own resolution: an exported variable.
                 self._client = anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
             except Exception as error:
                 raise MissingCredentials(
@@ -136,12 +137,22 @@ class ClaudeLlm(LlmClient):
         return self._client
 
     def _message(self, content: list[dict[str, Any]], model: str, effort: str | None) -> str:
+        resolved = self._settings.llm.effort if effort is None else effort
+        options: dict[str, Any] = {"output_config": {"effort": resolved}} if resolved else {}
         response = self._anthropic().messages.create(
             model=model,
             max_tokens=self._settings.llm.max_output_tokens,
-            output_config={"effort": effort or self._settings.llm.effort},
             messages=[{"role": "user", "content": content}],
+            **options,
         )
+        if response.stop_reason == "max_tokens":
+            raise LlmError(
+                f"Model hit max_tokens ({self._settings.llm.max_output_tokens}) and the "
+                "response is truncated. Raise STUDYSYNTH_LLM__MAX_OUTPUT_TOKENS and re-run; "
+                "the run resumes from its last checkpoint."
+            )
+        if response.stop_reason == "refusal":
+            raise LlmError(f"Model declined this request: {response.stop_details}")
         parts = [block.text for block in response.content if block.type == "text"]
         if not parts:
             raise LlmError("Claude returned no text content")
@@ -160,13 +171,24 @@ class ClaudeLlm(LlmClient):
             f"{prompt}\n\nReturn only JSON matching this schema:\n"
             f"{json.dumps(schema.model_json_schema())}"
         )
-        raw = self._message(
-            [{"type": "text", "text": instruction}], self._settings.llm.model, effort
-        )
-        try:
-            return schema.model_validate_json(_strip_fence(raw))
-        except ValidationError as error:
-            raise LlmError(f"Job '{job}' returned JSON that is not a {schema.__name__}") from error
+        attempts = max(1, self._settings.llm.max_attempts)
+        last: ValidationError | None = None
+        for attempt in range(attempts):
+            text = instruction if attempt == 0 else (
+                f"{instruction}\n\nYour previous reply did not parse as JSON for this "
+                "schema. Return the JSON object alone, with no prose and no code fence."
+            )
+            raw = self._message(
+                [{"type": "text", "text": text}], self._settings.llm.model, effort
+            )
+            try:
+                return schema.model_validate_json(_strip_fence(raw))
+            except ValidationError as error:
+                last = error
+        raise LlmError(
+            f"Job '{job}' returned JSON that is not a {schema.__name__} "
+            f"after {attempts} attempts"
+        ) from last
 
     def vision(self, prompt: str, image: Path, *, job: str) -> str:
         suffix = image.suffix.lstrip(".").lower()
@@ -182,7 +204,9 @@ class ClaudeLlm(LlmClient):
             },
             {"type": "text", "text": prompt},
         ]
-        return self._message(content, self._settings.llm.vision_model, None)
+        return self._message(
+            content, self._settings.llm.vision_model, self._settings.llm.vision_effort
+        )
 
 
 def _strip_fence(text: str) -> str:

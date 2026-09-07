@@ -12,12 +12,11 @@ import pytest
 
 from studysynth.clients import embeddings as embedding_backends
 from studysynth.clients import llm as llm_backends
-from studysynth.config import Settings
+from studysynth.library import ServiceError, build
+from studysynth.models import ChapterRange, Reason
 from studysynth.pipeline.graph import EXTRACT_CONCEPTS, Nodes, Runner
 from studysynth.pipeline.ingest import TextbookIngestor
-from studysynth.models import ChapterRange, Reason
 from studysynth.pipeline.retrieval import TextbookGate
-from studysynth.services import ServiceError, build
 from studysynth.store import Catalogue, Places, VectorStore
 
 from .conftest import mock_settings
@@ -31,8 +30,6 @@ TEXTBOOK = [
         "The step must hold for every n above the base, and that is the whole of it.",
     ],
     [
-        # Near-verbatim restatement of what the slides already gave the student.
-        # This is exactly what the novelty filter (spec 7.5) exists to reject.
         "# Strong induction restated",
         "Strong induction proves a property for every natural number at or above the",
         "base case by assuming the property holds for every value strictly below n,",
@@ -76,7 +73,11 @@ TEXTBOOK = [
 ]
 
 SLIDES = [
-    ["Strong induction", "Assume P(k) for all k < n, then prove P(n).", "The professor sets the exam."],
+    [
+        "Strong induction",
+        "Assume P(k) for all k < n, then prove P(n).",
+        "The professor sets the exam.",
+    ],
     ["Strong induction, continued", "Base case must be verified for each residue class."],
     ["Loop invariants", "Holds before, during and after the loop."],
 ]
@@ -140,7 +141,6 @@ def test_full_run_on_mocks_produces_a_document(project):
         slides_dir=str(project["slides_dir"]), notes_dir=str(project["notes_dir"]),
     )]
 
-    # The graph stops for review before it looks at any concept.
     assert runner.pending("run-1") == (EXTRACT_CONCEPTS,)
     assert "extract_concepts" not in visited
     state = runner.state("run-1")
@@ -220,7 +220,6 @@ def test_a_run_resumes_from_the_node_that_failed(project, monkeypatch):
     with pytest.raises(RuntimeError, match="simulated crash"):
         list(runner.stream("run-4"))
 
-    # Retrieval already ran and is checkpointed; the gate is not re-graded.
     mid = runner.state("run-4")
     assert mid["retrieval"].admitted
     assert "document" not in mid
@@ -228,9 +227,6 @@ def test_a_run_resumes_from_the_node_that_failed(project, monkeypatch):
     list(runner.stream("run-4"))
     assert runner.state("run-4")["document"].startswith("# Induction")
     assert calls["n"] == 2
-
-
-# --- persistence and replacement -------------------------------------------
 
 
 @pytest.fixture
@@ -255,7 +251,6 @@ def test_a_textbook_is_indexed_once_and_then_reused(shelf, tmp_path):
     assert status is not None
     assert status["filename"] == "book.pdf"
     assert status["chunks"] == chunks
-    # Asking again reports the stored index rather than rebuilding it.
     assert shelf.textbook_status("cs3340") == status
 
 

@@ -4,73 +4,37 @@ from __future__ import annotations
 
 import html
 import re
+import shutil
+import subprocess
 from collections import Counter
 from pathlib import Path
 
-from jinja2 import Environment, StrictUndefined
+from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from markdown_it import MarkdownIt
 
+from ..config import PdfSettings
 from ..models import RetrievalOutcome
+
+TEMPLATES = Path(__file__).resolve().parent.parent / "templates"
 
 TEXTBOOK_TAG = re.compile(r"\[C: pages (\d+)-(\d+)\]")
 CHECK_THIS = re.compile(r"\*\*Check this:\*\*")
 
 
-PAGE_CSS = """
-@page { size: A4; margin: 22mm 18mm; @bottom-center { content: counter(page); } }
-body { font: 11pt/1.5 Georgia, serif; color: #1a1a1a; }
-h1 { font-size: 20pt; border-bottom: 2px solid #1a1a1a; padding-bottom: 4pt; }
-h2 { font-size: 14pt; margin-top: 18pt; }
-h3 { font-size: 12pt; }
-blockquote { border-left: 3px solid #999; margin-left: 0; padding-left: 12pt; color: #444; }
-.src-c { background: #fff6e0; border-left: 3px solid #d99b00; padding: 2pt 6pt; display: inline-block; }
-.src-c .ref { font-size: 8pt; color: #8a6400; letter-spacing: .04em; }
-.check { background: #ffecec; border-left: 3px solid #c0392b; padding: 2pt 6pt; }
-.plain .src-c, .plain .check { background: none; border-left: none; padding: 0; }
-table { border-collapse: collapse; } td, th { border: 1px solid #bbb; padding: 3pt 6pt; }
-"""
-
-DOCUMENT_HTML = """<!doctype html>
-<html><head><meta charset="utf-8"><title>{{ title }}</title>
-<style>{{ css }}</style></head>
-<body class="{{ 'plain' if not highlight else '' }}">{{ body }}</body></html>
-"""
-
-REPORT_MD = """# Provenance report — {{ course }} / {{ chapter }}
-
-{% if outcome.chapters -%}
-Searched {{ outcome.chapters | join(", ") }}{% if outcome.auto_scoped %}, chosen automatically from the gaps in your notes{% endif %}.
-{%- else -%}
-No textbook chapter was searched.
-{%- endif %}
-
-Textbook tokens admitted: **{{ outcome.tokens_admitted }}** of a **{{ outcome.budget }}** budget.
-Passages admitted: **{{ outcome.admitted | length }}**. Rejected: **{{ outcome.rejections | length }}**.
-
-# Rejections by mechanism
-
-| Mechanism | Rejected |
-|---|---|
-{% for mechanism, count in by_mechanism -%}
-| {{ mechanism }} | {{ count }} |
-{% endfor %}
-# Admitted passages
-
-{% for passage in outcome.admitted -%}
-- pages {{ passage.page_start }}-{{ passage.page_end }}, necessity {{ '%.2f' % passage.necessity }}, {{ passage.token_estimate }} tokens
-{% endfor %}
-{% if not outcome.rejections %}
-> Nothing was rejected. Spec 7.8: that is a bug report, not a success.
-{% endif %}
-"""
+class RenderError(RuntimeError):
+    """Typesetting failed. The Markdown is still the document of record."""
 
 
 def _environment() -> Environment:
-    return Environment(undefined=StrictUndefined, autoescape=False)
+    return Environment(
+        loader=FileSystemLoader(TEMPLATES),
+        undefined=StrictUndefined,
+        autoescape=False,
+    )
 
 
 def tag_provenance(markdown: str) -> str:
-    """Wrap textbook passages and recorded disagreements so CSS can color them."""
+    """Wrap textbook passages and recorded disagreements so CSS can colour them."""
 
     def wrap(match: re.Match[str]) -> str:
         return (
@@ -79,7 +43,6 @@ def tag_provenance(markdown: str) -> str:
         )
 
     tagged = TEXTBOOK_TAG.sub(wrap, markdown)
-    # Close each opened span at the end of its paragraph.
     lines = []
     for line in tagged.splitlines():
         if '<span class="src-c">' in line:
@@ -91,17 +54,64 @@ def tag_provenance(markdown: str) -> str:
 
 
 def to_html(markdown: str, *, title: str, highlight: bool = True) -> str:
-    """LaTeX survives: `$...$` and `$$...$$` pass through untouched for KaTeX."""
+    """The on-screen preview, where `$...$` stays literal because no KaTeX is
+    loaded. `to_pdf` is what turns it into typeset mathematics."""
     parser = MarkdownIt("commonmark", {"html": True}).enable("table")
-    body = parser.render(tag_provenance(markdown))
-    template = _environment().from_string(DOCUMENT_HTML)
-    return template.render(title=html.escape(title), css=PAGE_CSS, body=body, highlight=highlight)
+    return _environment().get_template("document.html").render(
+        title=html.escape(title),
+        css=(TEMPLATES / "document.css").read_text(encoding="utf-8"),
+        body=parser.render(tag_provenance(markdown)),
+        highlight=highlight,
+    )
+
+
+def to_pdf(markdown: str, target: Path, settings: PdfSettings) -> Path:
+    """Typeset the document, turning its LaTeX into real mathematics.
+
+    Pandoc drives a TeX engine, so `$\\sum_{i=1}^{n}$` reaches the page as a
+    summation rather than as the source the Markdown shows. Provenance tags
+    print as written; the coloured version of them lives in `to_html`.
+    """
+    for binary, variable in ((settings.pandoc, "PANDOC"), (settings.engine, "ENGINE")):
+        if shutil.which(binary) is None:
+            raise RenderError(
+                f"'{binary}' is not on PATH. Install it, or point "
+                f"STUDYSYNTH_PDF__{variable} at the executable."
+            )
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    command = [
+        settings.pandoc,
+        "--from=markdown",
+        f"--pdf-engine={settings.engine}",
+        "--variable", f"geometry:{settings.paper}",
+        "--variable", f"geometry:margin={settings.margin}",
+        "--output", str(target),
+    ]
+    if settings.main_font:
+        command += ["--variable", f"mainfont={settings.main_font}"]
+
+    try:
+        finished = subprocess.run(
+            command,
+            input=markdown.encode("utf-8"),
+            capture_output=True,
+            timeout=settings.timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise RenderError(
+            f"{settings.pandoc} did not finish within {settings.timeout_seconds}s"
+        ) from error
+    if finished.returncode != 0:
+        detail = finished.stderr.decode("utf-8", "replace").strip().splitlines()
+        raise RenderError(f"{settings.pandoc} failed: {detail[-1] if detail else 'no output'}")
+    return target
 
 
 def provenance_report(course: str, chapter: str, outcome: RetrievalOutcome) -> str:
     counts = Counter(rejection.mechanism for rejection in outcome.rejections)
-    template = _environment().from_string(REPORT_MD)
-    return template.render(
+    return _environment().get_template("provenance.md").render(
         course=course,
         chapter=chapter,
         outcome=outcome,

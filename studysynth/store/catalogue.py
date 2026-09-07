@@ -5,11 +5,11 @@ from __future__ import annotations
 import sqlite3
 import threading
 from collections.abc import Callable, Iterable, Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import wraps
 from pathlib import Path
 from types import TracebackType
-from typing import Any, TypeVar
+from typing import Any
 
 from ..models import ChapterRange, Lecture, Parent, Rejection, RunRecord
 from .errors import StoreError
@@ -82,9 +82,8 @@ CREATE INDEX IF NOT EXISTS parents_chapter ON parents (course, chapter);
 """
 
 
-
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _lecture(row: sqlite3.Row) -> Lecture:
@@ -105,19 +104,15 @@ def _run(row: sqlite3.Row) -> RunRecord:
     )
 
 
-F = TypeVar("F", bound=Callable[..., Any])
-
-
-def _locked(method: F) -> F:
+def _locked[F: Callable[..., Any]](method: F) -> F:
     """Serialize access to the connection."""
 
     @wraps(method)
-    def guarded(self: "Catalogue", *args: Any, **kwargs: Any) -> Any:
+    def guarded(self: Catalogue, *args: Any, **kwargs: Any) -> Any:
         with self._lock:
             return method(self, *args, **kwargs)
 
     return guarded  # type: ignore[return-value]
-
 
 
 class Catalogue:
@@ -131,7 +126,7 @@ class Catalogue:
         self._db.executescript(SCHEMA)
         self._db.commit()
 
-    def __enter__(self) -> "Catalogue":
+    def __enter__(self) -> Catalogue:
         return self
 
     def __exit__(

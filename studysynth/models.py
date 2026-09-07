@@ -141,6 +141,7 @@ class Candidate(BaseModel):
     gap_id: str
     parent_id: str
     text: str
+    child_text: str = ""
     section_path: str
     page_start: int
     page_end: int
@@ -216,7 +217,6 @@ class GraphState(TypedDict, total=False):
     slides_dir: str
     notes_dir: str
 
-    # Replaced wholesale at the review interrupt, so these must not accumulate.
     slides: list[SlidePage]
     notes: list[NotePage]
     notes_approved: bool

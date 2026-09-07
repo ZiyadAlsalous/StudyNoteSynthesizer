@@ -23,8 +23,6 @@ def _connect(settings: Settings) -> QdrantClient:
         try:
             return QdrantClient(path=str(settings.paths.vectors))
         except RuntimeError as error:
-            # An embedded index is single-process. A second copy of the app, or
-            # one left running after a crash, holds the lock.
             if "already accessed" not in str(error):
                 raise
             raise IndexBusy(
@@ -69,7 +67,6 @@ class VectorStore:
                 distance=qmodels.Distance[self._settings.qdrant.distance.upper()],
             ),
         )
-        # Declared here, not later: chapter scoping (spec 7.2) must filter before the vector se.
         for field in self._settings.qdrant.payload_indexes:
             self._client.create_payload_index(
                 collection_name=name,
@@ -82,7 +79,9 @@ class VectorStore:
             )
         return name
 
-    def upsert(self, course: str, chunks: Sequence[Chunk], vectors: Sequence[Sequence[float]]) -> int:
+    def upsert(
+        self, course: str, chunks: Sequence[Chunk], vectors: Sequence[Sequence[float]]
+    ) -> int:
         if len(chunks) != len(vectors):
             raise StoreError(f"{len(chunks)} chunks against {len(vectors)} vectors")
         name = self.collection_for(course)
@@ -103,7 +102,7 @@ class VectorStore:
                     "token_estimate": chunk.token_estimate,
                 },
             )
-            for index, (chunk, vector) in enumerate(zip(chunks, vectors))
+            for index, (chunk, vector) in enumerate(zip(chunks, vectors, strict=True))
         ]
         self._client.upsert(collection_name=name, points=points)
         return len(points)
@@ -115,8 +114,6 @@ class VectorStore:
         name = self.collection_for(course)
         if not self._client.collection_exists(name):
             raise CollectionMissing(f"Collection {name} does not exist")
-        # No chapters means the whole book, which is how a chapter is detected
-        # in the first place.
         condition = (
             qmodels.Filter(
                 must=[

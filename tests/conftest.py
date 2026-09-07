@@ -6,9 +6,9 @@ from typing import Any, TypeVar
 import pytest
 from pydantic import BaseModel
 
-from studysynth.config import Settings
 from studysynth.clients.embeddings import MockEmbeddings
 from studysynth.clients.llm import LlmClient
+from studysynth.config import Settings
 from studysynth.models import Candidate, Concept, DraftedConcept, Gap, GapKind, Source
 
 Model = TypeVar("Model", bound=BaseModel)
@@ -110,3 +110,26 @@ def make_draft(body: str = "Strong induction assumes every smaller case.") -> Dr
         slide_pages=[3, 4],
         sources=[Source.SLIDES, Source.NOTES],
     )
+
+
+@pytest.fixture(autouse=True)
+def no_unfilled_placeholders(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`render` fills placeholders with str.replace, so a variable the call site
+    forgot does not raise: the literal `{name}` is sent to the model and paid
+    for. Fail the test instead of discovering it on a live run."""
+    import re
+
+    from studysynth.clients.llm import PromptLibrary
+
+    original = PromptLibrary.render
+    leftover = re.compile(r"\{[a-z_]+\}")
+
+    def checked(
+        self: PromptLibrary, name: str, variables: dict[str, Any] | None = None
+    ) -> str:
+        out = original(self, name, variables)
+        stray = leftover.findall(out)
+        assert not stray, f"prompt '{name}' shipped unfilled placeholders: {stray}"
+        return out
+
+    monkeypatch.setattr(PromptLibrary, "render", checked)

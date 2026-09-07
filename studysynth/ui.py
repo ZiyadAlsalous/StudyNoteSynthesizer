@@ -8,9 +8,9 @@ from typing import Any
 import streamlit as st
 
 from studysynth.config import Settings, load
-from studysynth.models import ChapterRange, Lecture, NotePage, RetrievalOutcome, RunRecord
+from studysynth.library import Library, ServiceError, build
+from studysynth.models import ChapterRange, Lecture, RetrievalOutcome, RunRecord
 from studysynth.pipeline.render import provenance_report, to_html
-from studysynth.services import Library, ServiceError, build
 from studysynth.store import IndexBusy, StoreError
 
 STEPS = {
@@ -40,9 +40,6 @@ def go(**params: str) -> None:
     st.rerun()
 
 
-# --- home -------------------------------------------------------------------
-
-
 def home(shelf: Library) -> None:
     st.title("Study Note Synthesizer")
     st.caption(
@@ -53,7 +50,7 @@ def home(shelf: Library) -> None:
     courses = shelf.courses()
     if courses:
         for row in _rows(courses, per_row=3):
-            for column, course in zip(st.columns(3), row):
+            for column, course in zip(st.columns(3), row, strict=True):
                 with column:
                     if course is None:
                         continue
@@ -89,9 +86,6 @@ def _course_box(shelf: Library, course: dict[str, str]) -> None:
 def _rows(items: list[Any], per_row: int) -> list[list[Any]]:
     padded = items + [None] * (-len(items) % per_row)
     return [padded[i : i + per_row] for i in range(0, len(padded), per_row)]
-
-
-# --- course -----------------------------------------------------------------
 
 
 def course_page(shelf: Library, course: str) -> None:
@@ -156,7 +150,7 @@ def _chapter_editor(shelf: Library, course: str) -> None:
                         page_end=_page(row["last page"], old.page_end),
                         manual_override=True,
                     )
-                    for old, row in zip(chapters, edited)
+                    for old, row in zip(chapters, edited, strict=True)
                 ],
             )
         st.success(f"Re-indexed, {chunks} chunks.")
@@ -181,7 +175,7 @@ def lectures_section(shelf: Library, course: str) -> None:
     with st.form("new_lecture", clear_on_submit=True):
         st.markdown("**New lecture**")
         left, right = st.columns([2, 2])
-        name = left.text_input("Name", placeholder="Week 3 — Induction")
+        name = left.text_input("Name", placeholder="Week 3, Induction")
         chapter = right.selectbox(
             "Textbook chapter", ["Find it automatically"] + list(chapters),
             help="Leave this alone unless you want to pin the search to one chapter.",
@@ -203,9 +197,6 @@ def _lecture_box(shelf: Library, course: str, lecture: Lecture) -> None:
         )
         if action.button("Open", key=f"open-{lecture.id}", use_container_width=True):
             go(course=course, lecture=lecture.id)
-
-
-# --- lecture ----------------------------------------------------------------
 
 
 def lecture_page(shelf: Library, course: str, lecture: Lecture) -> None:
@@ -233,9 +224,13 @@ def uploads_section(shelf: Library, course: str, lecture: Lecture) -> None:
         st.markdown("**Professor's lecture PDF**")
         if lecture.slides_name:
             st.success(lecture.slides_name)
+        else:
+            st.info("Nothing uploaded yet")
         deck = st.file_uploader(
-            "Slides", type=["pdf", "pptx"], key=f"deck-{lecture.id}", label_visibility="collapsed"
+            "Slides", type=["pdf", "pptx"], key=f"deck-{lecture.id}",
+            label_visibility="collapsed",
         )
+        st.caption("The lecture deck, PDF or PowerPoint. Replacing it removes the old one.")
         if deck is not None and st.button("Save slides", key=f"save-deck-{lecture.id}"):
             shelf.replace_slides(course, lecture.id, deck.name, deck.getbuffer().tobytes())
             st.rerun()
@@ -244,9 +239,14 @@ def uploads_section(shelf: Library, course: str, lecture: Lecture) -> None:
         st.markdown("**Your handwritten notes**")
         if lecture.note_count:
             st.success(f"{lecture.note_count} pages saved")
-        st.caption("One PDF of any length — a GoodNotes export or a scan. Replacing it removes the old one.")
+        else:
+            st.info("Nothing uploaded yet")
         notes = st.file_uploader(
             "Notes", type=["pdf"], key=f"notes-{lecture.id}", label_visibility="collapsed",
+        )
+        st.caption(
+            "One PDF of any length, a GoodNotes export or a scan. "
+            "Replacing it removes the old one."
         )
         if notes is not None and st.button("Save notes", key=f"save-notes-{lecture.id}"):
             try:
@@ -288,7 +288,7 @@ def history_section(shelf: Library, course: str, lecture: Lecture) -> None:
         return
     for record in history:
         stamp = record.created_at.strftime("%d %b %Y, %H:%M")
-        with st.expander(f"{stamp} — {record.status}", expanded=False):
+        with st.expander(f"{stamp} · {record.status}", expanded=False):
             if record.error:
                 st.error(record.error)
                 continue
@@ -296,15 +296,18 @@ def history_section(shelf: Library, course: str, lecture: Lecture) -> None:
             if not markdown:
                 st.caption("No document was produced.")
                 continue
+            stamped = f"{lecture.id}-{record.created_at:%Y%m%d-%H%M}"
+            typeset = shelf.pdf(record)
+            if typeset:
+                st.download_button(
+                    "Download PDF", typeset, file_name=f"{stamped}.pdf",
+                    mime="application/pdf", key=f"pdf-{record.id}",
+                )
             st.download_button(
-                "Download this version", markdown,
-                file_name=f"{lecture.id}-{record.created_at:%Y%m%d-%H%M}.md",
+                "Download Markdown", markdown, file_name=f"{stamped}.md",
                 mime="text/markdown", key=f"dl-{record.id}",
             )
             st.html(to_html(markdown, title=lecture.title))
-
-
-# --- a run in flight --------------------------------------------------------
 
 
 def consume(shelf: Library, run_id: str, stream: Any) -> None:
@@ -312,8 +315,8 @@ def consume(shelf: Library, run_id: str, stream: Any) -> None:
         try:
             for node, update in stream:
                 if node in STEPS:
-                    st.write(f"{STEPS[node]} — {_detail(update)}")
-        except Exception as error:  # noqa: BLE001 - shown on the page, run marked failed
+                    st.write(f"{STEPS[node]}: {_detail(update)}")
+        except Exception as error:
             shelf.fail(run_id, str(error))
             status.update(label="Failed", state="error")
             st.exception(error)
@@ -366,7 +369,7 @@ def review(shelf: Library, run_id: str) -> None:
         return
 
     edited: list[dict[str, Any]] = []
-    for tab, page in zip(st.tabs([f"Page {p.page}" for p in pages]), pages):
+    for tab, page in zip(st.tabs([f"Page {p.page}" for p in pages]), pages, strict=True):
         with tab:
             left, right = st.columns(2)
             if Path(page.image_path).exists():
@@ -399,10 +402,23 @@ def finished(shelf: Library, run_id: str) -> None:
             "Highlighted passages came from the textbook and carry a page reference. "
             "**Check this:** marks where your notes and the slides disagree."
         )
-    st.download_button(
-        "Download", markdown, file_name=f"{record.chapter or record.lecture}.md",
-        mime="text/markdown",
-    )
+    stem = record.chapter or record.lecture
+    typeset = shelf.pdf(record)
+    left, right = st.columns(2)
+    with left:
+        if typeset:
+            st.download_button(
+                "Download PDF", typeset, file_name=f"{stem}.pdf",
+                mime="application/pdf", type="primary",
+            )
+        else:
+            st.caption(shelf.pdf_error or "No typeset PDF for this run.")
+    with right:
+        st.download_button(
+            "Download Markdown", markdown, file_name=f"{stem}.md",
+            mime="text/markdown",
+        )
+    st.caption("The PDF typesets the mathematics. The Markdown keeps it as LaTeX source.")
     st.html(to_html(markdown, title=record.chapter, highlight=highlight))
 
     outcome = shelf.runner.state(run_id).get("retrieval") or RetrievalOutcome()
@@ -410,9 +426,6 @@ def finished(shelf: Library, run_id: str) -> None:
         st.caption(f"Textbook chapters matched to your notes: {', '.join(outcome.chapters)}")
     with st.expander("What the textbook gate rejected"):
         st.markdown(provenance_report(record.course, record.chapter, outcome))
-
-
-# --- routing ----------------------------------------------------------------
 
 
 def main() -> None:

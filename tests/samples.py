@@ -36,7 +36,9 @@ def write_pdf(path: Path, pages: list[list[str]]) -> Path:
             body.append(f"({_escape(line)}) Tj T*")
         body.append("ET")
         stream = "\n".join(body).encode()
-        objects.append(b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream")
+        objects.append(
+            b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream"
+        )
 
     out = bytearray(b"%PDF-1.4\n")
     offsets = [0]
