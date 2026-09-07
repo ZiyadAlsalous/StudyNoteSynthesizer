@@ -208,6 +208,8 @@ Everything you upload and everything the app produces lives under `data/`: the S
 
 ## 📫 Contact
 
-Built by **Ziyad Salous**
+Built by **Ziyad Alsalous**
 
-📧 [ziyadsalous00@gmail.com](mailto:ziyadsalous00@gmail.com)
+📧 [ziyadalsalous@outlook.com](mailto:ziyadalsalous@outlook.com)
+[![LinkedIn](https://shields.io)](https://www.linkedin.com/in/ziyad-alsalous-5a63b12b2/)
+
