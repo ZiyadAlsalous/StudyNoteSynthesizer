@@ -29,18 +29,19 @@ qwen = ["sentence-transformers>=3.0"]
 dev = ["pytest>=8.2", "mypy>=1.10", "ruff>=0.5"]
 
 [tool.setuptools.packages.find]
-include = ["studysynth*"]
+where = ["src"]
 
 [tool.setuptools.package-data]
 studysynth = ["prompts/*.md", "templates/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["studysynth"]
+files = ["src/studysynth"]
 
 [[tool.mypy.overrides]]
 module = ["qdrant_client.*", "pypdf.*", "pptx.*", "pymupdf.*", "langgraph.*",

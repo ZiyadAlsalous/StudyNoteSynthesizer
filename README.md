@@ -169,8 +169,8 @@ ruff check .   # lint
 ## 📂 Repository Structure
 
 ```
-studysynth/
-├── studysynth/
+StudyNoteSynthesizer/
+├── src/studysynth/
 │   ├── __main__.py          # Entry point, launches the interface
 │   ├── config.py            # Every tunable threshold. One place.
 │   ├── models.py            # Domain types. No logic.
@@ -190,8 +190,6 @@ studysynth/
 │   │   └── render.py        #   Markdown to HTML and PDF, provenance tags
 │   ├── prompts/             # All nine prompts as Markdown. Never inlined.
 │   └── templates/           # Document HTML, print CSS, provenance report
-├── docs/
-│   └── specification.md     # Source of truth for behaviour
 ├── fixtures/llm/            # Recorded responses, so tests run offline and free
 └── tests/                   # 54 tests
 ```
