@@ -64,7 +64,7 @@ def chapter_ranges(pdf: Path, level: int | None = None) -> list[ChapterRange]:
                 break
         ranges.append(
             ChapterRange(
-                chapter=_slug(title),
+                chapter=slug(title) or "chapter",
                 title=title.strip(),
                 page_start=start,
                 page_end=max(start, end),
@@ -101,9 +101,9 @@ def _chapter_depth(entries: list[tuple[int, str, int]]) -> int:
     return min((depth for depth, _, _ in entries), default=0)
 
 
-def _slug(text: str) -> str:
-    cleaned = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
-    return cleaned or "chapter"
+def slug(text: str) -> str:
+    """A filesystem and URL safe identifier, empty when nothing survives."""
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
 
 class TextbookIngestor:
@@ -149,7 +149,7 @@ class TextbookIngestor:
             for part, piece in enumerate(self._split_to_size(text, self._chunks.parent_tokens)):
                 if len(piece.strip()) < self._chunks.min_chunk_chars:
                     continue
-                identifier = f"{course}:{span.chapter}:{_slug(heading)}:{part}"
+                identifier = f"{course}:{span.chapter}:{slug(heading) or 'chapter'}:{part}"
                 parents.append(
                     Parent(
                         id=identifier,

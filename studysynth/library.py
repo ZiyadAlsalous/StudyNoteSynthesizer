@@ -16,7 +16,7 @@ from .clients.llm import LlmClient
 from .config import Settings
 from .models import ChapterRange, Lecture, NotePage, RetrievalOutcome, RunRecord
 from .pipeline.graph import EXTRACT_CONCEPTS, Nodes, Runner, note_pages
-from .pipeline.ingest import OutlineMissing, TextbookIngestor, chapter_ranges
+from .pipeline.ingest import OutlineMissing, TextbookIngestor, chapter_ranges, slug
 from .pipeline.render import RenderError, provenance_report, to_pdf
 from .pipeline.retrieval import TextbookGate
 from .store import Catalogue, Places, VectorStore
@@ -115,7 +115,7 @@ class Library:
         return self.catalogue.lectures(course)
 
     def add_lecture(self, course: str, title: str, chapter: str) -> str:
-        lecture_id = _slug(title) or uuid.uuid4().hex[:8]
+        lecture_id = slug(title) or uuid.uuid4().hex[:8]
         self.catalogue.add_lecture(course, lecture_id, title, chapter)
         return lecture_id
 
@@ -237,12 +237,6 @@ def build(settings: Settings) -> Library:
         llm=llm_backends.build(settings),
         embeddings=embedding_backends.build(settings),
     )
-
-
-def _slug(text: str) -> str:
-    import re
-
-    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
 
 def _safe(name: str, allowed: set[str]) -> str:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
@@ -280,6 +281,35 @@ def start_section(shelf: Library, course: str, lecture: Lecture) -> None:
         st.rerun()
 
 
+def _downloads(
+    shelf: Library,
+    record: RunRecord,
+    markdown: str,
+    *,
+    stem: str,
+    key: str = "",
+    side_by_side: bool = False,
+) -> None:
+    """The PDF and Markdown buttons for one run, wherever a run is shown."""
+    typeset = shelf.pdf(record)
+    suffix = f"-{key}" if key else ""
+    left, right = st.columns(2) if side_by_side else (nullcontext(), nullcontext())
+
+    with left:
+        if typeset:
+            st.download_button(
+                "Download PDF", typeset, file_name=f"{stem}.pdf",
+                mime="application/pdf", type="primary", key=f"pdf{suffix}",
+            )
+        elif side_by_side:
+            st.caption(shelf.pdf_error or "No typeset PDF for this run.")
+    with right:
+        st.download_button(
+            "Download Markdown", markdown, file_name=f"{stem}.md",
+            mime="text/markdown", key=f"md{suffix}",
+        )
+
+
 def history_section(shelf: Library, course: str, lecture: Lecture) -> None:
     history = shelf.history(course, lecture.id)
     st.subheader(f"Past runs ({len(history)})")
@@ -296,16 +326,10 @@ def history_section(shelf: Library, course: str, lecture: Lecture) -> None:
             if not markdown:
                 st.caption("No document was produced.")
                 continue
-            stamped = f"{lecture.id}-{record.created_at:%Y%m%d-%H%M}"
-            typeset = shelf.pdf(record)
-            if typeset:
-                st.download_button(
-                    "Download PDF", typeset, file_name=f"{stamped}.pdf",
-                    mime="application/pdf", key=f"pdf-{record.id}",
-                )
-            st.download_button(
-                "Download Markdown", markdown, file_name=f"{stamped}.md",
-                mime="text/markdown", key=f"dl-{record.id}",
+            _downloads(
+                shelf, record, markdown,
+                stem=f"{lecture.id}-{record.created_at:%Y%m%d-%H%M}",
+                key=record.id,
             )
             st.html(to_html(markdown, title=lecture.title))
 
@@ -402,22 +426,7 @@ def finished(shelf: Library, run_id: str) -> None:
             "Highlighted passages came from the textbook and carry a page reference. "
             "**Check this:** marks where your notes and the slides disagree."
         )
-    stem = record.chapter or record.lecture
-    typeset = shelf.pdf(record)
-    left, right = st.columns(2)
-    with left:
-        if typeset:
-            st.download_button(
-                "Download PDF", typeset, file_name=f"{stem}.pdf",
-                mime="application/pdf", type="primary",
-            )
-        else:
-            st.caption(shelf.pdf_error or "No typeset PDF for this run.")
-    with right:
-        st.download_button(
-            "Download Markdown", markdown, file_name=f"{stem}.md",
-            mime="text/markdown",
-        )
+    _downloads(shelf, record, markdown, stem=record.chapter or record.lecture, side_by_side=True)
     st.caption("The PDF typesets the mathematics. The Markdown keeps it as LaTeX source.")
     st.html(to_html(markdown, title=record.chapter, highlight=highlight))
 
