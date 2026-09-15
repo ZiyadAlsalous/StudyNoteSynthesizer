@@ -20,7 +20,7 @@ class LlmError(RuntimeError):
 
 
 class MissingCredentials(LlmError):
-    """No API key anywhere: not in .env, not exported, no CLI profile."""
+    """Anthropic rejected the credentials, or there were none to send."""
 
 
 class FixtureMissing(LlmError):
@@ -135,24 +135,26 @@ class ClaudeLlm(LlmClient):
             import anthropic
 
             key = self._settings.anthropic_api_key
-            try:
-                self._client = anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
-            except Exception as error:
-                raise MissingCredentials(
-                    "No Anthropic credentials found. Put ANTHROPIC_API_KEY in .env, "
-                    "export it, or run `ant auth login`."
-                ) from error
+            self._client = anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
         return self._client
 
     def _message(self, content: list[dict[str, Any]], model: str, effort: str | None) -> str:
+        import anthropic
+
         resolved = self._settings.llm.effort if effort is None else effort
         options: dict[str, Any] = {"output_config": {"effort": resolved}} if resolved else {}
-        response = self._anthropic().messages.create(
-            model=model,
-            max_tokens=self._settings.llm.max_output_tokens,
-            messages=[{"role": "user", "content": content}],
-            **options,
-        )
+        try:
+            response = self._anthropic().messages.create(
+                model=model,
+                max_tokens=self._settings.llm.max_output_tokens,
+                messages=[{"role": "user", "content": content}],
+                **options,
+            )
+        except anthropic.AuthenticationError as error:
+            raise MissingCredentials(
+                "Anthropic rejected the credentials. Put ANTHROPIC_API_KEY in .env, "
+                "export it, or run `ant auth login`."
+            ) from error
         if response.stop_reason == "max_tokens":
             raise LlmError(
                 f"Model hit max_tokens ({self._settings.llm.max_output_tokens}) and the "
