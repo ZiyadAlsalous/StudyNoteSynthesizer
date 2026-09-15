@@ -134,8 +134,14 @@ class ClaudeLlm(LlmClient):
         if self._client is None:
             import anthropic
 
+            options: dict[str, Any] = {
+                "timeout": self._settings.llm.timeout_seconds,
+                "max_retries": self._settings.llm.max_retries,
+            }
             key = self._settings.anthropic_api_key
-            self._client = anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
+            if key:
+                options["api_key"] = key
+            self._client = anthropic.Anthropic(**options)
         return self._client
 
     def _message(self, content: list[dict[str, Any]], model: str, effort: str | None) -> str:

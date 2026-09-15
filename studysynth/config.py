@@ -42,6 +42,8 @@ class LlmSettings(BaseModel):
     vision_model: str = "claude-haiku-4-5"
     vision_effort: str = ""
     max_output_tokens: int = 16000
+    timeout_seconds: float = 600.0
+    max_retries: int = 2
     effort: str = "high"
     grading_effort: str = "low"
     draft_effort: str = "medium"
