@@ -265,8 +265,7 @@ class SlideIngestor:
 
     FIGURE_TEXT_FLOOR = 40
 
-    def __init__(self, settings: Settings, client: LlmClient) -> None:
-        self._settings = settings
+    def __init__(self, client: LlmClient) -> None:
         self._client = client
 
     def ingest(self, source: Path) -> list[SlidePage]:

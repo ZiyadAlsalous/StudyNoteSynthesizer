@@ -117,7 +117,7 @@ def project(tmp_path: Path) -> dict[str, object]:
     )
 
     gate = TextbookGate(settings, llm, embed, vectors, catalogue)
-    nodes = Nodes(settings, llm, embed, gate, catalogue, places)
+    nodes = Nodes(settings, llm, gate, catalogue, places)
     return {
         "settings": settings,
         "catalogue": catalogue,

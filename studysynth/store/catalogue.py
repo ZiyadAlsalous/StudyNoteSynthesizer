@@ -8,7 +8,6 @@ from collections.abc import Callable, Iterable, Sequence
 from datetime import UTC, datetime
 from functools import wraps
 from pathlib import Path
-from types import TracebackType
 from typing import Any
 
 from ..models import ChapterRange, Lecture, Parent, Rejection, RunRecord
@@ -134,21 +133,6 @@ class Catalogue:
         self._db.executescript(SCHEMA)
         self._db.commit()
 
-    def __enter__(self) -> Catalogue:
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        tb: TracebackType | None,
-    ) -> None:
-        self.close()
-
-    @_locked
-    def close(self) -> None:
-        self._db.close()
-
     @_locked
     def add_course(self, course_id: str, title: str) -> None:
         self._db.execute(
@@ -174,23 +158,6 @@ class Catalogue:
             ],
         )
         self._db.commit()
-
-    @_locked
-    def chapter(self, course: str, chapter: str) -> ChapterRange:
-        row = self._db.execute(
-            "SELECT chapter, title, page_start, page_end, manual FROM chapters "
-            "WHERE course = ? AND chapter = ?",
-            (course, chapter),
-        ).fetchone()
-        if row is None:
-            raise StoreError(f"No page range recorded for {course}/{chapter}")
-        return ChapterRange(
-            chapter=row["chapter"],
-            title=row["title"],
-            page_start=row["page_start"],
-            page_end=row["page_end"],
-            manual_override=bool(row["manual"]),
-        )
 
     @_locked
     def chapters(self, course: str) -> list[ChapterRange]:

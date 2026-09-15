@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, TypedDict
+from typing import TypedDict
 
 from pydantic import BaseModel, Field
 
@@ -19,10 +19,7 @@ class Source(StrEnum):
 
 class ChunkType(StrEnum):
     PROSE = "prose"
-    SLIDE = "slide"
     TABLE = "table"
-    FIGURE = "figure"
-    FORMULA = "formula"
 
 
 class GapKind(StrEnum):
@@ -102,7 +99,6 @@ class SlidePage(BaseModel):
     deck: str
     markdown: str
     is_figure_only: bool = False
-    figure_description: str = ""
 
 
 class NotePage(BaseModel):
@@ -150,7 +146,6 @@ class Candidate(BaseModel):
     relevance: float | None = None
     necessity: float | None = None
     draft_similarity: float | None = None
-    introduced_terms: list[str] = Field(default_factory=list)
     token_estimate: int = 0
 
 
@@ -229,4 +224,3 @@ class GraphState(TypedDict, total=False):
     document: str
     verify_rounds: int
     unverified: list[str]
-    artifacts: dict[str, Any]

@@ -12,7 +12,6 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
-from ..clients.embeddings import EmbeddingBackend
 from ..clients.llm import LlmClient, PromptLibrary
 from ..config import Settings
 from ..models import (
@@ -61,7 +60,6 @@ class Nodes:
         self,
         settings: Settings,
         llm: LlmClient,
-        embeddings: EmbeddingBackend,
         gate: TextbookGate,
         catalogue: Catalogue,
         places: Places,
@@ -72,7 +70,7 @@ class Nodes:
         self._catalogue = catalogue
         self._places = places
         self._prompts = PromptLibrary(settings.prompts_dir)
-        self._slides = SlideIngestor(settings, llm)
+        self._slides = SlideIngestor(llm)
         self._notes = NoteIngestor(settings, llm, places)
 
     def ingest_slides(self, state: GraphState) -> dict[str, Any]:

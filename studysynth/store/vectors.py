@@ -43,11 +43,6 @@ class VectorStore:
         """Whether this course's textbook is already embedded."""
         return bool(self._client.collection_exists(self.collection_for(course)))
 
-    def count(self, course: str) -> int:
-        if not self.exists(course):
-            return 0
-        return int(self._client.count(self.collection_for(course)).count)
-
     def drop(self, course: str) -> None:
         if self.exists(course):
             self._client.delete_collection(self.collection_for(course))

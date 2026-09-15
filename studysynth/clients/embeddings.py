@@ -103,11 +103,6 @@ class QwenEmbeddings(EmbeddingBackend):
         return encoded
 
 
-def cosine(left: Vectors, right: Vectors) -> float:
-    """Both sides are already normalized, so this is a dot product."""
-    return float(np.dot(left, right))
-
-
 def build(settings: Settings) -> EmbeddingBackend:
     backend = settings.embeddings.backend
     if backend == "mock":

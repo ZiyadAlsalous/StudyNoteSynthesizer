@@ -43,7 +43,7 @@ class Library:
 
     def __post_init__(self) -> None:
         gate = TextbookGate(self.settings, self.llm, self.embeddings, self.vectors, self.catalogue)
-        nodes = Nodes(self.settings, self.llm, self.embeddings, gate, self.catalogue, self.places)
+        nodes = Nodes(self.settings, self.llm, gate, self.catalogue, self.places)
         self.runner = Runner(self.settings, nodes)
 
     def courses(self) -> list[dict[str, str]]:
