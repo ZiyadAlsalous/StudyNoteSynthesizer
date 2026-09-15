@@ -6,5 +6,10 @@ from .files import Places
 from .vectors import VectorStore
 
 __all__ = [
-    "Catalogue", "CollectionMissing", "IndexBusy", "Places", "StoreError", "VectorStore",
+    "Catalogue",
+    "CollectionMissing",
+    "IndexBusy",
+    "Places",
+    "StoreError",
+    "VectorStore",
 ]

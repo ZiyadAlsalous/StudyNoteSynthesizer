@@ -57,11 +57,15 @@ def to_html(markdown: str, *, title: str, highlight: bool = True) -> str:
     """The on-screen preview, where `$...$` stays literal because no KaTeX is
     loaded. `to_pdf` is what turns it into typeset mathematics."""
     parser = MarkdownIt("commonmark", {"html": True}).enable("table")
-    return _environment().get_template("document.html").render(
-        title=html.escape(title),
-        css=(TEMPLATES / "document.css").read_text(encoding="utf-8"),
-        body=parser.render(tag_provenance(markdown)),
-        highlight=highlight,
+    return (
+        _environment()
+        .get_template("document.html")
+        .render(
+            title=html.escape(title),
+            css=(TEMPLATES / "document.css").read_text(encoding="utf-8"),
+            body=parser.render(tag_provenance(markdown)),
+            highlight=highlight,
+        )
     )
 
 
@@ -84,9 +88,12 @@ def to_pdf(markdown: str, target: Path, settings: PdfSettings) -> Path:
         settings.pandoc,
         "--from=markdown",
         f"--pdf-engine={settings.engine}",
-        "--variable", f"geometry:{settings.paper}",
-        "--variable", f"geometry:margin={settings.margin}",
-        "--output", str(target),
+        "--variable",
+        f"geometry:{settings.paper}",
+        "--variable",
+        f"geometry:margin={settings.margin}",
+        "--output",
+        str(target),
     ]
     if settings.main_font:
         command += ["--variable", f"mainfont={settings.main_font}"]
@@ -111,9 +118,13 @@ def to_pdf(markdown: str, target: Path, settings: PdfSettings) -> Path:
 
 def provenance_report(course: str, chapter: str, outcome: RetrievalOutcome) -> str:
     counts = Counter(rejection.mechanism for rejection in outcome.rejections)
-    return _environment().get_template("provenance.md").render(
-        course=course,
-        chapter=chapter,
-        outcome=outcome,
-        by_mechanism=sorted(counts.items()),
+    return (
+        _environment()
+        .get_template("provenance.md")
+        .render(
+            course=course,
+            chapter=chapter,
+            outcome=outcome,
+            by_mechanism=sorted(counts.items()),
+        )
     )

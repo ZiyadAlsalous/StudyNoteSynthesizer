@@ -42,21 +42,15 @@ class Library:
     pdf_error: str = field(init=False, default="")
 
     def __post_init__(self) -> None:
-        gate = TextbookGate(
-            self.settings, self.llm, self.embeddings, self.vectors, self.catalogue
-        )
-        nodes = Nodes(
-            self.settings, self.llm, self.embeddings, gate, self.catalogue, self.places
-        )
+        gate = TextbookGate(self.settings, self.llm, self.embeddings, self.vectors, self.catalogue)
+        nodes = Nodes(self.settings, self.llm, self.embeddings, gate, self.catalogue, self.places)
         self.runner = Runner(self.settings, nodes)
-
 
     def courses(self) -> list[dict[str, str]]:
         return self.catalogue.courses()
 
     def add_course(self, course_id: str, title: str) -> None:
         self.catalogue.add_course(course_id, title)
-
 
     def textbook_status(self, course: str) -> dict[str, object] | None:
         """None when no book is indexed."""
@@ -75,8 +69,11 @@ class Library:
             pages = len(pypdf.PdfReader(str(pdf)).pages)
             ranges = [
                 ChapterRange(
-                    chapter="whole-book", title="Whole book", page_start=1,
-                    page_end=pages, manual_override=True,
+                    chapter="whole-book",
+                    title="Whole book",
+                    page_start=1,
+                    page_end=pages,
+                    manual_override=True,
                 )
             ]
         return len(ranges), self._index(course, pdf, filename, ranges)
@@ -89,9 +86,7 @@ class Library:
         pdf = self.places.textbook(course)
         return self._index(course, pdf, str(recorded["filename"]), ranges)
 
-    def _index(
-        self, course: str, pdf: Path, filename: str, ranges: Sequence[ChapterRange]
-    ) -> int:
+    def _index(self, course: str, pdf: Path, filename: str, ranges: Sequence[ChapterRange]) -> int:
         self.catalogue.set_chapters(course, ranges)
         parents, chunks = TextbookIngestor(self.settings).ingest(pdf, course, ranges)
         if not chunks:
@@ -109,7 +104,6 @@ class Library:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
         return target
-
 
     def lectures(self, course: str) -> list[Lecture]:
         return self.catalogue.lectures(course)
@@ -142,9 +136,7 @@ class Library:
         target.write_bytes(data)
 
         pages = self._page_count(target)
-        self.catalogue.set_lecture_sources(
-            course, lecture_id, slides_name=None, note_count=pages
-        )
+        self.catalogue.set_lecture_sources(course, lecture_id, slides_name=None, note_count=pages)
         return pages
 
     @staticmethod
@@ -157,7 +149,6 @@ class Library:
         except Exception as error:
             pdf.unlink(missing_ok=True)
             raise ServiceError(f"{pdf.name} could not be read as a PDF") from error
-
 
     def history(self, course: str, lecture_id: str) -> list[RunRecord]:
         return self.catalogue.runs_for(course, lecture_id)

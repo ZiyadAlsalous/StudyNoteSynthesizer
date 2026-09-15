@@ -56,11 +56,13 @@ def auto_gate(settings, vectors, embeddings):
 
 def test_chapters_are_detected_from_the_gaps_when_none_is_pinned(settings, embeddings):
     """A student should not have to know their induction lecture is chapter 4."""
-    vectors = StubVectors([
-        (0.91, {"chapter": "4-divide-and-conquer"}),
-        (0.88, {"chapter": "4-divide-and-conquer"}),
-        (0.42, {"chapter": "22-elementary-graph-algorithms"}),
-    ])
+    vectors = StubVectors(
+        [
+            (0.91, {"chapter": "4-divide-and-conquer"}),
+            (0.88, {"chapter": "4-divide-and-conquer"}),
+            (0.42, {"chapter": "22-elementary-graph-algorithms"}),
+        ]
+    )
     found = auto_gate(settings, vectors, embeddings).detect_chapters("cs3340", [make_gap()])
     assert found[0] == "4-divide-and-conquer", "the strongest chapter should win"
     assert vectors.filters == [[]], "the probe must search the whole book, unfiltered"
@@ -81,10 +83,14 @@ def test_detection_does_nothing_without_a_gap(settings, embeddings):
 
 
 def test_relevance_drops_a_topical_near_miss(settings, embeddings):
-    llm = StubLlm({"grade_relevance": {
-        "a": {"score": 0.91, "reason": "answers it"},
-        "b": {"score": 0.40, "reason": "same words, different question"},
-    }})
+    llm = StubLlm(
+        {
+            "grade_relevance": {
+                "a": {"score": 0.91, "reason": "answers it"},
+                "b": {"score": 0.40, "reason": "same words, different question"},
+            }
+        }
+    )
     kept, rejected = gate(settings, llm, embeddings).grade_relevance(
         [make_candidate("a"), make_candidate("b")], [make_gap()]
     )
@@ -103,9 +109,13 @@ def test_relevance_threshold_is_inclusive_at_the_configured_value(settings, embe
 
 
 def test_necessity_rejects_relevant_prose_the_student_already_has(settings, embeddings):
-    llm = StubLlm({"grade_necessity": {
-        "a": {"score": 0.2, "reason": "the drafted slide section already resolves this"},
-    }})
+    llm = StubLlm(
+        {
+            "grade_necessity": {
+                "a": {"score": 0.2, "reason": "the drafted slide section already resolves this"},
+            }
+        }
+    )
     kept, rejected = gate(settings, llm, embeddings).grade_necessity(
         [make_candidate("a", relevance=0.95)], [make_gap()], [make_draft()]
     )

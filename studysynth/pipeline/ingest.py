@@ -280,9 +280,7 @@ class SlideIngestor:
             raise IngestError(f"No slide decks found at {source}")
         pages: list[SlidePage] = []
         for deck in decks:
-            pages.extend(
-                self._pptx(deck) if deck.suffix.lower() == ".pptx" else self._pdf(deck)
-            )
+            pages.extend(self._pptx(deck) if deck.suffix.lower() == ".pptx" else self._pdf(deck))
         return pages
 
     def _pdf(self, deck: Path) -> list[SlidePage]:

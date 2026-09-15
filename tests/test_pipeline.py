@@ -108,10 +108,13 @@ def project(tmp_path: Path) -> dict[str, object]:
     slides_dir = tmp_path / "slides"
     write_pdf(slides_dir / "lecture01.pdf", SLIDES)
     notes_dir = tmp_path / "notes"
-    write_pdf(notes_dir / "notes.pdf", [
-        ["Inductive hypothesis = what you may assume", "Inductive step = what you still owe"],
-        ["Loop invariants", "not sure I follow this one - ask in office hours"],
-    ])
+    write_pdf(
+        notes_dir / "notes.pdf",
+        [
+            ["Inductive hypothesis = what you may assume", "Inductive step = what you still owe"],
+            ["Loop invariants", "not sure I follow this one - ask in office hours"],
+        ],
+    )
 
     gate = TextbookGate(settings, llm, embed, vectors, catalogue)
     nodes = Nodes(settings, llm, embed, gate, catalogue, places)
@@ -136,10 +139,16 @@ def test_full_run_on_mocks_produces_a_document(project):
     runner, catalogue = project["runner"], project["catalogue"]
     catalogue.start_run("run-1", "cs3340", "induction")
 
-    visited = [node for node, _ in runner.stream(
-        "run-1", course="cs3340", chapter="induction",
-        slides_dir=str(project["slides_dir"]), notes_dir=str(project["notes_dir"]),
-    )]
+    visited = [
+        node
+        for node, _ in runner.stream(
+            "run-1",
+            course="cs3340",
+            chapter="induction",
+            slides_dir=str(project["slides_dir"]),
+            notes_dir=str(project["notes_dir"]),
+        )
+    ]
 
     assert runner.pending("run-1") == (EXTRACT_CONCEPTS,)
     assert "extract_concepts" not in visited
@@ -161,10 +170,15 @@ def test_full_run_on_mocks_produces_a_document(project):
 def test_every_anti_bloat_mechanism_fires_in_a_real_run(project):
     runner, catalogue = project["runner"], project["catalogue"]
     catalogue.start_run("run-2", "cs3340", "induction")
-    list(runner.stream(
-        "run-2", course="cs3340", chapter="induction",
-        slides_dir=str(project["slides_dir"]), notes_dir=str(project["notes_dir"]),
-    ))
+    list(
+        runner.stream(
+            "run-2",
+            course="cs3340",
+            chapter="induction",
+            slides_dir=str(project["slides_dir"]),
+            notes_dir=str(project["notes_dir"]),
+        )
+    )
     runner.approve_notes("run-2")
     list(runner.stream("run-2"))
 
@@ -183,10 +197,15 @@ def test_every_anti_bloat_mechanism_fires_in_a_real_run(project):
 def test_the_rejection_log_names_the_mechanism_and_the_score(project):
     runner, catalogue = project["runner"], project["catalogue"]
     catalogue.start_run("run-3", "cs3340", "induction")
-    list(runner.stream(
-        "run-3", course="cs3340", chapter="induction",
-        slides_dir=str(project["slides_dir"]), notes_dir=str(project["notes_dir"]),
-    ))
+    list(
+        runner.stream(
+            "run-3",
+            course="cs3340",
+            chapter="induction",
+            slides_dir=str(project["slides_dir"]),
+            notes_dir=str(project["notes_dir"]),
+        )
+    )
     runner.approve_notes("run-3")
     list(runner.stream("run-3"))
 
@@ -200,10 +219,15 @@ def test_a_run_resumes_from_the_node_that_failed(project, monkeypatch):
     node runs a second time."""
     runner, catalogue = project["runner"], project["catalogue"]
     catalogue.start_run("run-4", "cs3340", "induction")
-    list(runner.stream(
-        "run-4", course="cs3340", chapter="induction",
-        slides_dir=str(project["slides_dir"]), notes_dir=str(project["notes_dir"]),
-    ))
+    list(
+        runner.stream(
+            "run-4",
+            course="cs3340",
+            chapter="induction",
+            slides_dir=str(project["slides_dir"]),
+            notes_dir=str(project["notes_dir"]),
+        )
+    )
     runner.approve_notes("run-4")
 
     nodes = runner._nodes
@@ -326,10 +350,12 @@ def test_a_lecture_is_not_runnable_until_both_sources_exist(shelf, tmp_path):
     with pytest.raises(ServiceError, match="Upload both"):
         shelf.start("cs3340", lecture)
 
-    shelf.replace_slides("cs3340", "week-3", "deck.pdf",
-                         write_pdf(tmp_path / "d.pdf", SLIDES).read_bytes())
-    shelf.replace_notes("cs3340", "week-3", "notes.pdf",
-                        write_pdf(tmp_path / "n.pdf", [["a page"]]).read_bytes())
+    shelf.replace_slides(
+        "cs3340", "week-3", "deck.pdf", write_pdf(tmp_path / "d.pdf", SLIDES).read_bytes()
+    )
+    shelf.replace_notes(
+        "cs3340", "week-3", "notes.pdf", write_pdf(tmp_path / "n.pdf", [["a page"]]).read_bytes()
+    )
     assert shelf.catalogue.lecture("cs3340", "week-3").ready
 
 
@@ -349,8 +375,9 @@ def test_run_history_is_kept_per_lecture(shelf):
 def test_deleting_a_lecture_keeps_its_finished_documents(shelf, tmp_path):
     """Sources go, history stays: the documents are the point."""
     shelf.add_lecture("cs3340", "Week 3", "induction")
-    shelf.replace_notes("cs3340", "week-3", "notes.pdf",
-                        write_pdf(tmp_path / "n.pdf", [["a page"]]).read_bytes())
+    shelf.replace_notes(
+        "cs3340", "week-3", "notes.pdf", write_pdf(tmp_path / "n.pdf", [["a page"]]).read_bytes()
+    )
     shelf.catalogue.start_run("r1", "cs3340", "induction", "week-3")
     shelf.catalogue.finish_run("r1", "done", document_path="/tmp/one.md")
 
@@ -365,13 +392,20 @@ def test_notes_survive_the_review_interrupt_as_objects(project):
     the review screen and both downstream nodes."""
     runner, catalogue = project["runner"], project["catalogue"]
     catalogue.start_run("run-notes", "cs3340", "induction")
-    list(runner.stream(
-        "run-notes", course="cs3340", chapter="induction",
-        slides_dir=str(project["slides_dir"]), notes_dir=str(project["notes_dir"]),
-    ))
+    list(
+        runner.stream(
+            "run-notes",
+            course="cs3340",
+            chapter="induction",
+            slides_dir=str(project["slides_dir"]),
+            notes_dir=str(project["notes_dir"]),
+        )
+    )
 
-    edited = [p.model_copy(update={"markdown": "corrected"}).model_dump()
-              for p in runner.state("run-notes")["notes"]]
+    edited = [
+        p.model_copy(update={"markdown": "corrected"}).model_dump()
+        for p in runner.state("run-notes")["notes"]
+    ]
     runner.approve_notes("run-notes", edited)
 
     pages = runner.state("run-notes")["notes"]

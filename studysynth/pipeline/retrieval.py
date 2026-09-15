@@ -80,7 +80,6 @@ class TextbookGate:
         rejected = [rejection for _, rejection in verdicts if rejection is not None]
         return kept, rejected
 
-
     def retrieve(
         self, course: str, chapter: str, gaps: Sequence[Gap], chapters: Sequence[str] | None = None
     ) -> list[Candidate]:
@@ -120,7 +119,6 @@ class TextbookGate:
             if existing is None or candidate.retrieval_score > existing.retrieval_score:
                 best[candidate.parent_id] = candidate
         return sorted(best.values(), key=lambda c: -c.retrieval_score)
-
 
     def detect_chapters(self, course: str, gaps: Sequence[Gap]) -> list[str]:
         """Which chapters the notes are about, decided by the gaps themselves."""
@@ -166,7 +164,6 @@ class TextbookGate:
                 )
         return kept, rejected
 
-
     def grade_relevance(self, candidates: Sequence[Candidate], gaps: Sequence[Gap]) -> Survivors:
         """Graded by the index first, then by a model.
 
@@ -201,7 +198,10 @@ class TextbookGate:
                 },
             )
             verdict = self._llm.structured(
-                prompt, RelevanceVerdict, job="grade_relevance", key=candidate.parent_id,
+                prompt,
+                RelevanceVerdict,
+                job="grade_relevance",
+                key=candidate.parent_id,
                 effort=self._settings.llm.grading_effort,
             )
             graded = candidate.model_copy(update={"relevance": verdict.score})
@@ -218,7 +218,6 @@ class TextbookGate:
 
         kept, rejected = self._grade(candidates, judge)
         return kept, cheap + rejected
-
 
     def grade_necessity(
         self,
@@ -240,7 +239,10 @@ class TextbookGate:
                 },
             )
             verdict = self._llm.structured(
-                prompt, NecessityVerdict, job="grade_necessity", key=candidate.parent_id,
+                prompt,
+                NecessityVerdict,
+                job="grade_necessity",
+                key=candidate.parent_id,
                 effort=self._settings.llm.grading_effort,
             )
             graded = candidate.model_copy(update={"necessity": verdict.score})
@@ -256,7 +258,6 @@ class TextbookGate:
             )
 
         return self._grade(candidates, judge)
-
 
     def filter_novel(
         self, candidates: Sequence[Candidate], drafts: Sequence[DraftedConcept]
@@ -288,7 +289,6 @@ class TextbookGate:
                 )
         return kept, rejected
 
-
     def guard_new_concepts(
         self, candidates: Sequence[Candidate], concepts: Sequence[Concept]
     ) -> Survivors:
@@ -302,7 +302,10 @@ class TextbookGate:
                 "new_concept_guard", {"concept_names": names, "passage": candidate.text}
             )
             verdict = self._llm.structured(
-                prompt, NewConceptVerdict, job="new_concept_guard", key=candidate.parent_id,
+                prompt,
+                NewConceptVerdict,
+                job="new_concept_guard",
+                key=candidate.parent_id,
                 effort=self._settings.llm.grading_effort,
             )
             if not verdict.terms:
@@ -317,7 +320,6 @@ class TextbookGate:
 
         return self._grade(candidates, judge)
 
-
     def budget_for(self, document_tokens: int) -> int:
         """The binding constraint, whichever of the two ceilings is tighter."""
         fraction = self._config.max_textbook_fraction
@@ -327,9 +329,9 @@ class TextbookGate:
             proportional = int(fraction * document_tokens / (1.0 - fraction))
         return max(0, min(self._config.textbook_token_budget, proportional))
 
-    def enforce_budget(self, candidates: Sequence[Candidate], document_tokens: int) -> tuple[
-        list[Admitted], list[Rejection], int, int
-    ]:
+    def enforce_budget(
+        self, candidates: Sequence[Candidate], document_tokens: int
+    ) -> tuple[list[Admitted], list[Rejection], int, int]:
         budget = self.budget_for(document_tokens)
         ordered = sorted(candidates, key=lambda c: -(c.necessity or 0.0))
         admitted: list[Admitted] = []
@@ -363,7 +365,6 @@ class TextbookGate:
             )
         return admitted, rejected, spent, budget
 
-
     def run(
         self,
         course: str,
@@ -393,6 +394,10 @@ class TextbookGate:
         rejections += dropped
 
         return RetrievalOutcome(
-            chapters=chapters, auto_scoped=auto, admitted=admitted,
-            rejections=rejections, tokens_admitted=spent, budget=budget,
+            chapters=chapters,
+            auto_scoped=auto,
+            admitted=admitted,
+            rejections=rejections,
+            tokens_admitted=spent,
+            budget=budget,
         )

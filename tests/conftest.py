@@ -27,7 +27,12 @@ class StubLlm(LlmClient):
         return self.verdicts.get(job, {}).get("text", "")
 
     def structured(
-        self, prompt: str, schema: type[Model], *, job: str, key: str = "",
+        self,
+        prompt: str,
+        schema: type[Model],
+        *,
+        job: str,
+        key: str = "",
         effort: str | None = None,
     ) -> Model:
         self.jobs.append((job, key))
@@ -124,9 +129,7 @@ def no_unfilled_placeholders(monkeypatch: pytest.MonkeyPatch) -> None:
     original = PromptLibrary.render
     leftover = re.compile(r"\{[a-z_]+\}")
 
-    def checked(
-        self: PromptLibrary, name: str, variables: dict[str, Any] | None = None
-    ) -> str:
+    def checked(self: PromptLibrary, name: str, variables: dict[str, Any] | None = None) -> str:
         out = original(self, name, variables)
         stray = leftover.findall(out)
         assert not stray, f"prompt '{name}' shipped unfilled placeholders: {stray}"

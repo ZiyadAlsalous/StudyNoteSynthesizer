@@ -88,19 +88,27 @@ def _now() -> str:
 
 def _lecture(row: sqlite3.Row) -> Lecture:
     return Lecture(
-        id=row["id"], course=row["course"], title=row["title"], chapter=row["chapter"],
+        id=row["id"],
+        course=row["course"],
+        title=row["title"],
+        chapter=row["chapter"],
         created_at=datetime.fromisoformat(row["created_at"]),
-        slides_name=row["slides_name"], note_count=row["note_count"],
+        slides_name=row["slides_name"],
+        note_count=row["note_count"],
     )
 
 
 def _run(row: sqlite3.Row) -> RunRecord:
     return RunRecord(
-        id=row["id"], course=row["course"], chapter=row["chapter"], lecture=row["lecture"],
+        id=row["id"],
+        course=row["course"],
+        chapter=row["chapter"],
+        lecture=row["lecture"],
         status=row["status"],
         created_at=datetime.fromisoformat(row["created_at"]),
         updated_at=datetime.fromisoformat(row["updated_at"]),
-        document_path=row["document_path"], error=row["error"],
+        document_path=row["document_path"],
+        error=row["error"],
     )
 
 
@@ -246,9 +254,7 @@ class Catalogue:
 
     @_locked
     def delete_lecture(self, course: str, lecture_id: str) -> None:
-        self._db.execute(
-            "DELETE FROM lectures WHERE course = ? AND id = ?", (course, lecture_id)
-        )
+        self._db.execute("DELETE FROM lectures WHERE course = ? AND id = ?", (course, lecture_id))
         self._db.commit()
 
     @_locked
@@ -277,9 +283,7 @@ class Catalogue:
         return [_run(row) for row in rows]
 
     @_locked
-    def start_run(
-        self, run_id: str, course: str, chapter: str, lecture: str = ""
-    ) -> RunRecord:
+    def start_run(self, run_id: str, course: str, chapter: str, lecture: str = "") -> RunRecord:
         stamp = _now()
         self._db.execute(
             "INSERT OR REPLACE INTO runs "
@@ -295,8 +299,7 @@ class Catalogue:
         self, run_id: str, status: str, document_path: str | None = None, error: str | None = None
     ) -> None:
         self._db.execute(
-            "UPDATE runs SET status = ?, updated_at = ?, document_path = ?, error = ? "
-            "WHERE id = ?",
+            "UPDATE runs SET status = ?, updated_at = ?, document_path = ?, error = ? WHERE id = ?",
             (status, _now(), document_path, error, run_id),
         )
         self._db.commit()
@@ -323,9 +326,7 @@ class Catalogue:
 
     @_locked
     def rejections(self, run_id: str) -> list[Rejection]:
-        rows = self._db.execute(
-            "SELECT * FROM rejections WHERE run_id = ?", (run_id,)
-        ).fetchall()
+        rows = self._db.execute("SELECT * FROM rejections WHERE run_id = ?", (run_id,)).fetchall()
         return [
             Rejection(
                 candidate_id=row["candidate_id"],
@@ -346,8 +347,15 @@ class Catalogue:
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
-                    p.id, p.course, p.chapter, p.heading, p.section_path,
-                    p.text, p.page_start, p.page_end, p.token_estimate,
+                    p.id,
+                    p.course,
+                    p.chapter,
+                    p.heading,
+                    p.section_path,
+                    p.text,
+                    p.page_start,
+                    p.page_end,
+                    p.token_estimate,
                 )
                 for p in parents
             ],
@@ -360,8 +368,13 @@ class Catalogue:
         if row is None:
             raise StoreError(f"No parent section {parent_id}")
         return Parent(
-            id=row["id"], course=row["course"], chapter=row["chapter"],
-            heading=row["heading"], section_path=row["section_path"], text=row["text"],
-            page_start=row["page_start"], page_end=row["page_end"],
+            id=row["id"],
+            course=row["course"],
+            chapter=row["chapter"],
+            heading=row["heading"],
+            section_path=row["section_path"],
+            text=row["text"],
+            page_start=row["page_start"],
+            page_end=row["page_end"],
             token_estimate=row["tokens"],
         )

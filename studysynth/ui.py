@@ -146,7 +146,8 @@ def _chapter_editor(shelf: Library, course: str) -> None:
                 course,
                 [
                     ChapterRange(
-                        chapter=old.chapter, title=old.title,
+                        chapter=old.chapter,
+                        title=old.title,
                         page_start=_page(row["first page"], old.page_start),
                         page_end=_page(row["last page"], old.page_end),
                         manual_override=True,
@@ -178,7 +179,8 @@ def lectures_section(shelf: Library, course: str) -> None:
         left, right = st.columns([2, 2])
         name = left.text_input("Name", placeholder="Week 3, Induction")
         chapter = right.selectbox(
-            "Textbook chapter", ["Find it automatically"] + list(chapters),
+            "Textbook chapter",
+            ["Find it automatically"] + list(chapters),
             help="Leave this alone unless you want to pin the search to one chapter.",
         )
         if st.form_submit_button("Create lecture") and name.strip():
@@ -228,7 +230,9 @@ def uploads_section(shelf: Library, course: str, lecture: Lecture) -> None:
         else:
             st.info("Nothing uploaded yet")
         deck = st.file_uploader(
-            "Slides", type=["pdf", "pptx"], key=f"deck-{lecture.id}",
+            "Slides",
+            type=["pdf", "pptx"],
+            key=f"deck-{lecture.id}",
             label_visibility="collapsed",
         )
         st.caption("The lecture deck, PDF or PowerPoint. Replacing it removes the old one.")
@@ -243,11 +247,13 @@ def uploads_section(shelf: Library, course: str, lecture: Lecture) -> None:
         else:
             st.info("Nothing uploaded yet")
         notes = st.file_uploader(
-            "Notes", type=["pdf"], key=f"notes-{lecture.id}", label_visibility="collapsed",
+            "Notes",
+            type=["pdf"],
+            key=f"notes-{lecture.id}",
+            label_visibility="collapsed",
         )
         st.caption(
-            "One PDF of any length, a GoodNotes export or a scan. "
-            "Replacing it removes the old one."
+            "One PDF of any length, a GoodNotes export or a scan. Replacing it removes the old one."
         )
         if notes is not None and st.button("Save notes", key=f"save-notes-{lecture.id}"):
             try:
@@ -298,15 +304,22 @@ def _downloads(
     with left:
         if typeset:
             st.download_button(
-                "Download PDF", typeset, file_name=f"{stem}.pdf",
-                mime="application/pdf", type="primary", key=f"pdf{suffix}",
+                "Download PDF",
+                typeset,
+                file_name=f"{stem}.pdf",
+                mime="application/pdf",
+                type="primary",
+                key=f"pdf{suffix}",
             )
         elif side_by_side:
             st.caption(shelf.pdf_error or "No typeset PDF for this run.")
     with right:
         st.download_button(
-            "Download Markdown", markdown, file_name=f"{stem}.md",
-            mime="text/markdown", key=f"md{suffix}",
+            "Download Markdown",
+            markdown,
+            file_name=f"{stem}.md",
+            mime="text/markdown",
+            key=f"md{suffix}",
         )
 
 
@@ -327,7 +340,9 @@ def history_section(shelf: Library, course: str, lecture: Lecture) -> None:
                 st.caption("No document was produced.")
                 continue
             _downloads(
-                shelf, record, markdown,
+                shelf,
+                record,
+                markdown,
                 stem=f"{lecture.id}-{record.created_at:%Y%m%d-%H%M}",
                 key=record.id,
             )

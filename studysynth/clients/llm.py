@@ -55,7 +55,12 @@ class LlmClient(ABC):
 
     @abstractmethod
     def structured(
-        self, prompt: str, schema: type[Model], *, job: str, key: str = "",
+        self,
+        prompt: str,
+        schema: type[Model],
+        *,
+        job: str,
+        key: str = "",
         effort: str | None = None,
     ) -> Model: ...
 
@@ -75,9 +80,7 @@ class MockLlm(LlmClient):
         if job not in self._cache:
             path = self._fixtures / f"{job}.json"
             if not path.exists():
-                raise FixtureMissing(
-                    f"Mock mode has no fixture for job '{job}' (looked in {path})"
-                )
+                raise FixtureMissing(f"Mock mode has no fixture for job '{job}' (looked in {path})")
             self._cache[job] = json.loads(path.read_text(encoding="utf-8"))
         return self._cache[job]
 
@@ -96,7 +99,12 @@ class MockLlm(LlmClient):
         return value if isinstance(value, str) else json.dumps(value)
 
     def structured(
-        self, prompt: str, schema: type[Model], *, job: str, key: str = "",
+        self,
+        prompt: str,
+        schema: type[Model],
+        *,
+        job: str,
+        key: str = "",
         effort: str | None = None,
     ) -> Model:
         self.calls.append((job, key))
@@ -159,12 +167,15 @@ class ClaudeLlm(LlmClient):
         return "".join(parts)
 
     def complete(self, prompt: str, *, job: str, effort: str | None = None) -> str:
-        return self._message(
-            [{"type": "text", "text": prompt}], self._settings.llm.model, effort
-        )
+        return self._message([{"type": "text", "text": prompt}], self._settings.llm.model, effort)
 
     def structured(
-        self, prompt: str, schema: type[Model], *, job: str, key: str = "",
+        self,
+        prompt: str,
+        schema: type[Model],
+        *,
+        job: str,
+        key: str = "",
         effort: str | None = None,
     ) -> Model:
         instruction = (
@@ -174,20 +185,21 @@ class ClaudeLlm(LlmClient):
         attempts = max(1, self._settings.llm.max_attempts)
         last: ValidationError | None = None
         for attempt in range(attempts):
-            text = instruction if attempt == 0 else (
-                f"{instruction}\n\nYour previous reply did not parse as JSON for this "
-                "schema. Return the JSON object alone, with no prose and no code fence."
+            text = (
+                instruction
+                if attempt == 0
+                else (
+                    f"{instruction}\n\nYour previous reply did not parse as JSON for this "
+                    "schema. Return the JSON object alone, with no prose and no code fence."
+                )
             )
-            raw = self._message(
-                [{"type": "text", "text": text}], self._settings.llm.model, effort
-            )
+            raw = self._message([{"type": "text", "text": text}], self._settings.llm.model, effort)
             try:
                 return schema.model_validate_json(_strip_fence(raw))
             except ValidationError as error:
                 last = error
         raise LlmError(
-            f"Job '{job}' returned JSON that is not a {schema.__name__} "
-            f"after {attempts} attempts"
+            f"Job '{job}' returned JSON that is not a {schema.__name__} after {attempts} attempts"
         ) from last
 
     def vision(self, prompt: str, image: Path, *, job: str) -> str:

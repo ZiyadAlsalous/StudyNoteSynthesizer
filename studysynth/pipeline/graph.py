@@ -188,9 +188,7 @@ class Nodes:
             sections.append(block)
 
         uncovered = [
-            concept.name
-            for concept in state.get("concepts", [])
-            if not concept.covered_by_notes
+            concept.name for concept in state.get("concepts", []) if not concept.covered_by_notes
         ]
         unverified = state.get("unverified", []) if state.get("verify_rounds") else []
         prompt = self._prompts.render(
