@@ -2,16 +2,6 @@
 
 **Your handwritten lecture notes, completed against your professor's slides, with the course textbook allowed in only where they leave a real gap.**
 
-[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Claude](https://img.shields.io/badge/Claude-Sonnet%205-D97757?logo=anthropic&logoColor=white)](https://www.anthropic.com/)
-[![Claude Haiku](https://img.shields.io/badge/Claude-Haiku%204.5-D97757?logo=anthropic&logoColor=white)](https://www.anthropic.com/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-checkpointed-1C3C3C)](https://langchain-ai.github.io/langgraph/)
-[![Qdrant](https://img.shields.io/badge/Qdrant-vector%20index-DC244C?logo=qdrant&logoColor=white)](https://qdrant.tech/)
-[![Qwen3](https://img.shields.io/badge/Qwen3-embeddings-615CED)](https://huggingface.co/Qwen)
-[![Streamlit](https://img.shields.io/badge/Streamlit-UI-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
-[![mypy](https://img.shields.io/badge/mypy-strict-2A6DB2)](https://mypy-lang.org/)
-[![ruff](https://img.shields.io/badge/ruff-clean-D7FF64?logo=ruff&logoColor=black)](https://docs.astral.sh/ruff/)
-
 ## Overview
 
 Photograph your handwritten notes for a lecture. Point the app at your professor's slide deck and, optionally, the course textbook. It returns one exam-ready study document, typeset as a PDF: everything from the slides, your own reasoning folded in beside the point it explains, and disagreements between the two shown rather than silently resolved.
@@ -33,7 +23,7 @@ Everything runs on your own machine with your own API key. Your notes never leav
 - **The textbook is embedded once.** Parsed, chunked and written to an on-disk vector index per course. Later runs query that index rather than re-embedding the book.
 - **Provenance on every passage.** A toggle colours the document by source, and every run keeps a report of what the gate rejected and why.
 - **Prompts are files, not code.** All nine live in `studysynth/prompts/` as Markdown you can edit without touching Python.
-- **Runs offline for development.** A mock backend replays recorded fixtures, so the whole pipeline and all 54 tests run with no API key and no cost.
+- **Runs offline for development.** A mock backend replays recorded fixtures, so the whole pipeline and all 57 tests run with no API key and no cost.
 
 ## Architecture
 
@@ -161,7 +151,7 @@ Only one copy can run at a time, because the index is an embedded single-process
 ```bash
 STUDYSYNTH_LLM__BACKEND=mock STUDYSYNTH_EMBEDDINGS__BACKEND=mock python -m studysynth ui
 
-pytest         # 54 tests: the seven controls, a full mock run, persistence
+pytest         # 57 tests: the seven controls, a full mock run, persistence
 mypy           # strict, 19 modules
 ruff check .   # lint
 ```
@@ -191,7 +181,7 @@ StudyNoteSynthesizer/
 │   ├── prompts/             # All nine prompts as Markdown. Never inlined.
 │   └── templates/           # Document HTML, print CSS, provenance report
 ├── fixtures/llm/            # Recorded responses, so tests run offline and free
-└── tests/                   # 54 tests
+└── tests/                   # 57 tests
 ```
 
 Everything you upload and everything the app produces lives under `data/`: the SQLite catalogue, the vector index, your files, and one folder per run holding its PDF, its Markdown and its provenance report. `data/` and `.env` are both gitignored, so your notes and your key never reach GitHub.
@@ -208,5 +198,5 @@ Everything you upload and everything the app produces lives under `data/`: the S
 
 Built by **Ziyad Alsalous**
 
-[![Email](https://img.shields.io/badge/Email-ziyadalsalous%40outlook.com-EA4335?logo=maildotru&logoColor=white)](mailto:ziyadalsalous@outlook.com)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Ziyad%20Alsalous-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/ziyad-alsalous-5a63b12b2/)
+[ziyadalsalous@outlook.com](mailto:ziyadalsalous@outlook.com)
+· [LinkedIn](https://www.linkedin.com/in/ziyad-alsalous-5a63b12b2/)
