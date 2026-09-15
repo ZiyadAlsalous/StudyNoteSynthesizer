@@ -1,4 +1,4 @@
-"""Minimal real PDF and PNG files, so ingestion is tested against actual bytes.
+"""A minimal real PDF, so ingestion is tested against actual bytes.
 
 Hand-rolled rather than pulled from a fixture directory: a checked-in binary is
 opaque, and reportlab is a dependency this project does not otherwise need.

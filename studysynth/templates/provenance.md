@@ -25,5 +25,5 @@ Rejected: **{{ outcome.rejections | length }}**.
   necessity {{ '%.2f' % passage.necessity }}, {{ passage.token_estimate }} tokens
 {% endfor %}
 {% if not outcome.rejections %}
-> Nothing was rejected. Spec 7.8: that is a bug report, not a success.
+> Nothing was rejected. That is a bug report, not a success.
 {% endif %}

@@ -1,4 +1,7 @@
-"""Spec section 7: the seven mechanisms that keep the textbook out of the document."""
+"""The seven mechanisms that keep the textbook out of the document.
+
+The 7.x numbers on each rejection match the gate table in the README.
+"""
 
 from __future__ import annotations
 
@@ -169,7 +172,7 @@ class TextbookGate:
 
         The cosine floor is the same question asked more cheaply, so its
         rejections are logged under 7.3 like any other. Nothing disappears
-        without a reason and a score: spec 7.8.
+        without a reason and a score.
         """
         questions = {gap.id: gap.question for gap in gaps}
         floor = self._config.min_vector_score

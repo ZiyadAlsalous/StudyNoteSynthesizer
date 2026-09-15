@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 
 class Source(StrEnum):
-    """Spec section 2: the authority ranking, in order."""
+    """The authority ranking, in order."""
 
     SLIDES = "A"
     NOTES = "B"
@@ -163,7 +163,7 @@ class Admitted(BaseModel):
 
 
 class Rejection(BaseModel):
-    """Spec 7.8: why a textbook candidate was rejected, with its score."""
+    """Why a textbook candidate was rejected, with its score."""
 
     candidate_id: str
     gap_id: str

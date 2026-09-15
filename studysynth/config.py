@@ -81,7 +81,10 @@ class ChunkSettings(BaseModel):
 
 
 class RetrievalSettings(BaseModel):
-    """Spec section 7: every threshold standing between the textbook and the output."""
+    """Every threshold standing between the textbook and the output.
+
+    The mechanisms these thresholds drive are tabulated in the README.
+    """
 
     allow_adjacent_chapters: bool = False
     auto_scope_chapters: int = 2

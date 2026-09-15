@@ -1,7 +1,7 @@
 """One test per anti-bloat mechanism, each exercised alone.
 
-Spec section 7 says a run where nothing is ever rejected is a bug report. These
-tests are what stops that from happening quietly.
+A run where nothing is ever rejected is a bug report. These tests are what
+stops that from happening quietly.
 """
 
 from __future__ import annotations
@@ -236,8 +236,8 @@ def test_the_vector_floor_is_off_by_default(settings):
 
 
 def test_the_vector_floor_logs_what_it_drops(settings, embeddings):
-    """Spec 7.8: nothing disappears without a reason and a score, however cheap
-    the mechanism that removed it."""
+    """Nothing disappears without a reason and a score, however cheap the
+    mechanism that removed it."""
     settings.retrieval.min_vector_score = 0.5
     llm = StubLlm({"grade_relevance": {"keep": {"score": 0.9}}})
     weak = make_candidate("weak")
