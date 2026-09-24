@@ -53,7 +53,7 @@ class LlmSettings(BaseModel):
 
 class EmbeddingSettings(BaseModel):
     backend: str = "mock"
-    model: str = "Qwen/Qwen3-Embedding-8B"
+    model: str = "Qwen/Qwen3-Embedding-0.6B"
     dimensions: int = 1024
     batch_size: int = 16
     query_prefix: str = (
@@ -101,8 +101,8 @@ class RetrievalSettings(BaseModel):
 
 
 class VerifySettings(BaseModel):
-    max_rounds: int = 1
-    drop_unverified: bool = True
+    max_rounds: int = 2
+    flag_unverified: bool = True
 
 
 class PdfSettings(BaseModel):

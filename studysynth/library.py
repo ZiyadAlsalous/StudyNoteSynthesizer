@@ -161,7 +161,7 @@ class Library:
 
     def start(self, course: str, lecture: Lecture) -> tuple[str, Iterator[tuple[str, Any]]]:
         if not lecture.ready:
-            raise ServiceError("Upload both the slides and the note photos first")
+            raise ServiceError("Upload both the slides and the notes PDF first")
         run_id = uuid.uuid4().hex[:12]
         self.catalogue.start_run(run_id, course, lecture.chapter, lecture.id)
         stream = self.runner.stream(

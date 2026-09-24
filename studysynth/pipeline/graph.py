@@ -215,7 +215,7 @@ class Nodes:
             "verify_rounds": rounds,
         }
         final = rounds >= self._settings.verify.max_rounds
-        if verdict.unverified and final and self._settings.verify.drop_unverified:
+        if verdict.unverified and final and self._settings.verify.flag_unverified:
             flagged = "\n".join(f"- {claim}" for claim in verdict.unverified)
             update["document"] = (
                 f"{state.get('document', '')}\n\n"

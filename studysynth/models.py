@@ -50,7 +50,7 @@ class ChapterRange(BaseModel):
 
 
 class Lecture(BaseModel):
-    """One folder inside a course: a slide deck, note photos, and its runs."""
+    """One folder inside a course: a slide deck, a notes PDF, and its runs."""
 
     id: str
     course: str

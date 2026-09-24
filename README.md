@@ -4,7 +4,7 @@
 
 ## Overview
 
-Photograph your handwritten notes for a lecture. Point the app at your professor's slide deck and, optionally, the course textbook. It returns one exam-ready study document, typeset as a PDF: everything from the slides, your own reasoning folded in beside the point it explains, and disagreements between the two shown rather than silently resolved.
+Scan your handwritten notes for a lecture to a PDF. Point the app at your professor's slide deck and, optionally, the course textbook. It returns one exam-ready study document, typeset as a PDF: everything from the slides, your own reasoning folded in beside the point it explains, and disagreements between the two shown rather than silently resolved.
 
 The hard part is not writing the document. It is **keeping the textbook out of it**. A textbook is written to be read over a term; a study document is read the night before an exam. Admit textbook prose freely and the useful part drowns.
 
@@ -28,7 +28,7 @@ Everything runs on your own machine with your own API key. Your notes never leav
 ## Architecture
 
 ```
-Slides (PDF/PPTX)          Note photos            Textbook (PDF, optional)
+Slides (PDF/PPTX)          Notes (PDF)            Textbook (PDF, optional)
       │                         │                          │
       ▼                         ▼                          ▼
  page extraction          vision OCR              outline to chapters
@@ -191,6 +191,7 @@ Everything you upload and everything the app produces lives under `data/`: the S
 - [ ] Prompt caching on the graders, where the drafted chapter is identical across every candidate in a run
 - [ ] Per-job token accounting, so cost per run is measured rather than estimated
 - [ ] Tune the vector floor against real Qwen scores and switch it on
+- [ ] Re-tune the 0.82 novelty threshold against real Qwen scores; it was set on the mock embedder, which measures shared words rather than meaning
 - [ ] A layout-aware parser, so structural chunking sees real headings instead of the flat text `pypdf` returns
 - [ ] An offline eval: coverage, bloat rate and citation validity against a hand-labelled chapter
 

@@ -269,7 +269,7 @@ def uploads_section(shelf: Library, course: str, lecture: Lecture) -> None:
 
 def start_section(shelf: Library, course: str, lecture: Lecture) -> None:
     if not lecture.ready:
-        st.info("Upload both the slides and your note photos to build this lecture.")
+        st.info("Upload both the slides and your notes PDF to build this lecture.")
         return
     if not lecture.chapter:
         st.caption(
