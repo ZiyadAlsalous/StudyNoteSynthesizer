@@ -201,12 +201,21 @@ class Nodes:
         return {"document": self._llm.complete(prompt, job="synthesize_chapter")}
 
     def verify(self, state: GraphState) -> dict[str, Any]:
+        """Checked against all three sources, so a claim from the notes or an admitted
+        textbook passage is not flagged as unsupported."""
+        outcome = state.get("retrieval") or RetrievalOutcome()
+        sources = _join(
+            [
+                _join(page.markdown for page in state.get("slides", [])),
+                _join(
+                    f"## Notes page {page.page}\n\n{page.markdown}" for page in note_pages(state)
+                ),
+                _join(f"{passage.citation} {passage.text}" for passage in outcome.admitted),
+            ]
+        )
         prompt = self._prompts.render(
             "verify_claims",
-            {
-                "document": state.get("document", ""),
-                "sources": _join(page.markdown for page in state.get("slides", [])),
-            },
+            {"document": state.get("document", ""), "sources": sources},
         )
         verdict = self._llm.structured(prompt, VerifyVerdict, job="verify_claims")
         rounds = state.get("verify_rounds", 0) + 1
