@@ -3,6 +3,8 @@
 {% if outcome.chapters -%}
 Searched {{ outcome.chapters | join(", ") }}
 {%- if outcome.auto_scoped %}, chosen automatically from the gaps in your notes{% endif %}.
+{%- elif not outcome.has_textbook -%}
+This course has no textbook, so gaps were filled by the model and labelled as model explanations.
 {%- else -%}
 No textbook chapter was searched.
 {%- endif %}

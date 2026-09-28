@@ -278,24 +278,28 @@ def test_a_textbook_is_indexed_once_and_then_reused(shelf, tmp_path):
     assert shelf.textbook_status("cs3340") == status
 
 
-def test_replacing_notes_removes_the_previous_pdf_and_its_pages(shelf, tmp_path):
+def test_the_same_file_name_replaces_its_pdf_and_pages(shelf, tmp_path):
     """A student re-exports their notes often. A run must never mix two
-    versions of the same page."""
+    versions of the same page, and a different file name adds, not replaces."""
     from studysynth.pipeline.ingest import NoteIngestor
 
     shelf.add_lecture("cs3340", "Week 3", "induction")
     long_notes = write_pdf(tmp_path / "a.pdf", [[f"page {n}"] for n in range(1, 13)])
-    assert shelf.replace_notes("cs3340", "week-3", "a.pdf", long_notes.read_bytes()) == 12
+    assert shelf.add_notes("cs3340", "week-3", "a.pdf", long_notes.read_bytes()) == 12
 
     folder = shelf.places.notes_dir("cs3340", "week-3")
-    reader = NoteIngestor(shelf.settings, shelf.llm, shelf.places)
+    reader = NoteIngestor(shelf.settings, shelf.llm, shelf.places, shelf.catalogue)
     assert len(reader._images(folder)) == 12
 
     short_notes = write_pdf(tmp_path / "b.pdf", [["only page"]])
-    assert shelf.replace_notes("cs3340", "week-3", "b.pdf", short_notes.read_bytes()) == 1
-    assert len(list(folder.glob("*.pdf"))) == 1, "the previous PDF survived"
+    assert shelf.add_notes("cs3340", "week-3", "a.pdf", short_notes.read_bytes()) == 1
+    assert len(list(folder.glob("*.pdf"))) == 1, "the previous version survived"
     assert len(reader._images(folder)) == 1, "stale rendered pages survived"
     assert shelf.catalogue.lecture("cs3340", "week-3").note_count == 1
+
+    shelf.add_notes("cs3340", "week-3", "b.pdf", short_notes.read_bytes())
+    assert shelf.sources("cs3340", "week-3")["notes"] == ["a.pdf", "b.pdf"]
+    assert shelf.catalogue.lecture("cs3340", "week-3").note_count == 2
 
 
 @pytest.mark.parametrize("pages", [1, 7, 30, 64])
@@ -306,10 +310,10 @@ def test_a_notes_pdf_of_any_length_is_accepted(shelf, tmp_path, pages):
     shelf.add_lecture("cs3340", f"Week {pages}", "induction")
     lecture_id = f"week-{pages}"
     pdf = write_pdf(tmp_path / f"n{pages}.pdf", [[f"page {n}"] for n in range(1, pages + 1)])
-    assert shelf.replace_notes("cs3340", lecture_id, "notes.pdf", pdf.read_bytes()) == pages
+    assert shelf.add_notes("cs3340", lecture_id, "notes.pdf", pdf.read_bytes()) == pages
 
     folder = shelf.places.notes_dir("cs3340", lecture_id)
-    images = NoteIngestor(shelf.settings, shelf.llm, shelf.places)._images(folder)
+    images = NoteIngestor(shelf.settings, shelf.llm, shelf.places, shelf.catalogue)._images(folder)
     assert len(images) == pages, "a page was dropped"
     assert all(p.suffix == ".png" and p.stat().st_size > 0 for p in images)
 
@@ -317,14 +321,14 @@ def test_a_notes_pdf_of_any_length_is_accepted(shelf, tmp_path, pages):
 def test_notes_reject_anything_that_is_not_a_pdf(shelf):
     shelf.add_lecture("cs3340", "Week 3", "induction")
     with pytest.raises(ServiceError, match="must be a PDF"):
-        shelf.replace_notes("cs3340", "week-3", "notes.docx", b"PK")
+        shelf.add_notes("cs3340", "week-3", "notes.docx", b"PK")
 
 
 def test_an_unreadable_pdf_gives_a_clear_error(shelf):
     """A raw PyMuPDF stack trace tells a student nothing."""
     shelf.add_lecture("cs3340", "Week 3", "induction")
     with pytest.raises(ServiceError, match="could not be read as a PDF"):
-        shelf.replace_notes("cs3340", "week-3", "notes.pdf", b"not really a pdf")
+        shelf.add_notes("cs3340", "week-3", "notes.pdf", b"not really a pdf")
 
 
 def test_rendered_pages_are_reused_on_a_second_read(shelf, tmp_path):
@@ -333,9 +337,9 @@ def test_rendered_pages_are_reused_on_a_second_read(shelf, tmp_path):
 
     shelf.add_lecture("cs3340", "Week 3", "induction")
     pdf = write_pdf(tmp_path / "notes.pdf", [["one"], ["two"], ["three"]])
-    shelf.replace_notes("cs3340", "week-3", "notes.pdf", pdf.read_bytes())
+    shelf.add_notes("cs3340", "week-3", "notes.pdf", pdf.read_bytes())
     folder = shelf.places.notes_dir("cs3340", "week-3")
-    reader = NoteIngestor(shelf.settings, shelf.llm, shelf.places)
+    reader = NoteIngestor(shelf.settings, shelf.llm, shelf.places, shelf.catalogue)
 
     first = reader._images(folder)
     stamps = [p.stat().st_mtime_ns for p in first]
@@ -350,10 +354,10 @@ def test_a_lecture_is_not_runnable_until_both_sources_exist(shelf, tmp_path):
     with pytest.raises(ServiceError, match="Upload both"):
         shelf.start("cs3340", lecture)
 
-    shelf.replace_slides(
+    shelf.add_slides(
         "cs3340", "week-3", "deck.pdf", write_pdf(tmp_path / "d.pdf", SLIDES).read_bytes()
     )
-    shelf.replace_notes(
+    shelf.add_notes(
         "cs3340", "week-3", "notes.pdf", write_pdf(tmp_path / "n.pdf", [["a page"]]).read_bytes()
     )
     assert shelf.catalogue.lecture("cs3340", "week-3").ready
@@ -375,7 +379,7 @@ def test_run_history_is_kept_per_lecture(shelf):
 def test_deleting_a_lecture_keeps_its_finished_documents(shelf, tmp_path):
     """Sources go, history stays: the documents are the point."""
     shelf.add_lecture("cs3340", "Week 3", "induction")
-    shelf.replace_notes(
+    shelf.add_notes(
         "cs3340", "week-3", "notes.pdf", write_pdf(tmp_path / "n.pdf", [["a page"]]).read_bytes()
     )
     shelf.catalogue.start_run("r1", "cs3340", "induction", "week-3")

@@ -251,3 +251,17 @@ def test_the_vector_floor_logs_what_it_drops(settings, embeddings):
     assert rejected[0].score == pytest.approx(0.2)
     assert "vector floor" in rejected[0].mechanism
     assert ("grade_relevance", "weak") not in llm.jobs, "the floor should run before the model"
+
+
+def test_a_course_without_a_textbook_skips_the_gate(settings, embeddings):
+    """The textbook is optional. A course that never uploaded one must still
+    build its document from the slides and notes."""
+    from studysynth.store import Catalogue, VectorStore
+
+    settings.qdrant.backend = "memory"
+    gate = TextbookGate(
+        settings, StubLlm(), embeddings, VectorStore(settings), Catalogue(settings.paths.catalogue)
+    )
+    outcome = gate.run("hci", "", [make_gap()], [make_concept()], [make_draft()])
+    assert outcome.admitted == [] and outcome.rejections == []
+    assert not outcome.has_textbook

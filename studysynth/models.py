@@ -101,6 +101,15 @@ class SlidePage(BaseModel):
     is_figure_only: bool = False
 
 
+class SourcePage(BaseModel):
+    """One extracted page of an uploaded slide deck or notes PDF, as stored."""
+
+    page: int
+    content_hash: str = ""
+    markdown: str
+    corrected: bool = False
+
+
 class NotePage(BaseModel):
     page: int
     image_path: str
@@ -180,6 +189,7 @@ class RetrievalOutcome(BaseModel):
     rejections: list[Rejection] = Field(default_factory=list)
     tokens_admitted: int = 0
     budget: int = 0
+    has_textbook: bool = True
 
 
 class DraftedConcept(BaseModel):

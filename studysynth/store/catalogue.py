@@ -1,4 +1,4 @@
-"""SQLite: courses, lectures, chapters, runs, the rejection log."""
+"""SQLite: courses, lectures, chapters, runs, the rejection log, extracted sources."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from functools import wraps
 from pathlib import Path
 from typing import Any
 
-from ..models import ChapterRange, Lecture, Parent, Rejection, RunRecord
+from ..models import ChapterRange, Lecture, Parent, Rejection, RunRecord, SourcePage
 from .errors import StoreError
 
 SCHEMA = """
@@ -78,6 +78,27 @@ CREATE TABLE IF NOT EXISTS parents (
     tokens       INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS parents_chapter ON parents (course, chapter);
+CREATE TABLE IF NOT EXISTS source_files (
+    course     TEXT NOT NULL,
+    lecture    TEXT NOT NULL,
+    kind       TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    file_hash  TEXT NOT NULL,
+    added_at   TEXT NOT NULL,
+    PRIMARY KEY (course, lecture, kind, name)
+);
+CREATE TABLE IF NOT EXISTS source_pages (
+    course       TEXT NOT NULL,
+    lecture      TEXT NOT NULL,
+    kind         TEXT NOT NULL,
+    name         TEXT NOT NULL,
+    page         INTEGER NOT NULL,
+    content_hash TEXT NOT NULL DEFAULT '',
+    markdown     TEXT NOT NULL,
+    corrected    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (course, lecture, kind, name, page)
+);
+CREATE INDEX IF NOT EXISTS source_pages_hash ON source_pages (content_hash);
 """
 
 
@@ -222,6 +243,118 @@ class Catalogue:
     @_locked
     def delete_lecture(self, course: str, lecture_id: str) -> None:
         self._db.execute("DELETE FROM lectures WHERE course = ? AND id = ?", (course, lecture_id))
+        for table in ("source_files", "source_pages"):
+            self._db.execute(
+                f"DELETE FROM {table} WHERE course = ? AND lecture = ?", (course, lecture_id)
+            )
+        self._db.commit()
+
+    @_locked
+    def delete_course(self, course: str) -> list[str]:
+        """Removes every row the course owns and returns its run ids, so their files can go."""
+        runs = [
+            row["id"] for row in self._db.execute("SELECT id FROM runs WHERE course = ?", (course,))
+        ]
+        self._db.executemany("DELETE FROM rejections WHERE run_id = ?", [(r,) for r in runs])
+        self._db.execute("DELETE FROM courses WHERE id = ?", (course,))
+        for table in (
+            "chapters",
+            "lectures",
+            "runs",
+            "textbooks",
+            "parents",
+            "source_files",
+            "source_pages",
+        ):
+            self._db.execute(f"DELETE FROM {table} WHERE course = ?", (course,))
+        self._db.commit()
+        return runs
+
+    @_locked
+    def stored_pages(
+        self, course: str, lecture: str, kind: str, name: str, file_hash: str
+    ) -> list[SourcePage] | None:
+        """The pages already extracted from this exact file, or None if it is new or changed."""
+        row = self._db.execute(
+            "SELECT file_hash FROM source_files "
+            "WHERE course = ? AND lecture = ? AND kind = ? AND name = ?",
+            (course, lecture, kind, name),
+        ).fetchone()
+        if row is None or row["file_hash"] != file_hash:
+            return None
+        rows = self._db.execute(
+            "SELECT page, content_hash, markdown, corrected FROM source_pages "
+            "WHERE course = ? AND lecture = ? AND kind = ? AND name = ? ORDER BY page",
+            (course, lecture, kind, name),
+        ).fetchall()
+        return [
+            SourcePage(
+                page=r["page"],
+                content_hash=r["content_hash"],
+                markdown=r["markdown"],
+                corrected=bool(r["corrected"]),
+            )
+            for r in rows
+        ]
+
+    @_locked
+    def store_pages(
+        self,
+        course: str,
+        lecture: str,
+        kind: str,
+        name: str,
+        file_hash: str,
+        pages: Sequence[SourcePage],
+    ) -> None:
+        """Replaces whatever was stored for this file name."""
+        self._forget(course, lecture, kind, name)
+        self._db.execute(
+            "INSERT INTO source_files (course, lecture, kind, name, file_hash, added_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (course, lecture, kind, name, file_hash, _now()),
+        )
+        self._db.executemany(
+            "INSERT INTO source_pages "
+            "(course, lecture, kind, name, page, content_hash, markdown, corrected) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (course, lecture, kind, name, p.page, p.content_hash, p.markdown, int(p.corrected))
+                for p in pages
+            ],
+        )
+        self._db.commit()
+
+    @_locked
+    def forget_source(self, course: str, lecture: str, kind: str, name: str) -> None:
+        self._forget(course, lecture, kind, name)
+        self._db.commit()
+
+    def _forget(self, course: str, lecture: str, kind: str, name: str) -> None:
+        for table in ("source_files", "source_pages"):
+            self._db.execute(
+                f"DELETE FROM {table} WHERE course = ? AND lecture = ? AND kind = ? AND name = ?",
+                (course, lecture, kind, name),
+            )
+
+    @_locked
+    def known_transcript(self, content_hash: str) -> str | None:
+        """A page already transcribed anywhere, preferring the student's correction."""
+        row = self._db.execute(
+            "SELECT markdown FROM source_pages WHERE kind = 'notes' AND content_hash = ? "
+            "ORDER BY corrected DESC LIMIT 1",
+            (content_hash,),
+        ).fetchone()
+        return str(row["markdown"]) if row else None
+
+    @_locked
+    def save_correction(self, course: str, lecture: str, content_hash: str, text: str) -> None:
+        """The reviewed transcript replaces the OCR, so the next run starts from it."""
+        self._db.execute(
+            "UPDATE source_pages SET markdown = ?, corrected = 1 "
+            "WHERE course = ? AND lecture = ? AND kind = 'notes' AND content_hash = ?",
+            (text, course, lecture, content_hash),
+        )
         self._db.commit()
 
     @_locked

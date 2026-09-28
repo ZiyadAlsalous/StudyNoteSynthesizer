@@ -378,6 +378,10 @@ class TextbookGate:
     ) -> RetrievalOutcome:
         rejections: list[Rejection] = []
         auto = not chapter
+        if not self._vectors.exists(course):
+            # The textbook is optional: without one the document is built from
+            # the slides and notes alone.
+            return RetrievalOutcome(auto_scoped=auto, has_textbook=False)
         chapters = self.detect_chapters(course, gaps) if auto else self._scope(course, chapter)
         candidates = self.retrieve(course, chapter, gaps, chapters)
 

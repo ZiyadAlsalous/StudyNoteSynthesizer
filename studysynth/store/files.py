@@ -32,25 +32,10 @@ class Places:
         target.mkdir(parents=True, exist_ok=True)
         return target
 
-    def clear(self, folder: Path) -> int:
-        """Replacing an upload removes what it replaces."""
-        removed = 0
-        if folder.is_dir():
-            for path in folder.iterdir():
-                if path.is_file():
-                    path.unlink()
-                    removed += 1
-        return removed
-
     def run(self, run_id: str) -> Path:
         return self._paths.runs / run_id
 
     def artifact(self, run_id: str, name: str) -> Path:
         target = self.run(run_id) / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        return target
-
-    def note_cache(self, content_hash: str) -> Path:
-        target = self._paths.root / "cache" / "ocr" / f"{content_hash}.md"
         target.parent.mkdir(parents=True, exist_ok=True)
         return target

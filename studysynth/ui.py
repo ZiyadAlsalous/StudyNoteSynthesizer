@@ -63,8 +63,8 @@ def home(shelf: Library) -> None:
     with st.form("new_course", clear_on_submit=True):
         st.subheader("New course")
         left, right = st.columns([1, 2])
-        identifier = left.text_input("Short id", placeholder="cs3340")
-        title = right.text_input("Name", placeholder="Analysis of Algorithms")
+        identifier = left.text_input("Course code", placeholder="Add course code")
+        title = right.text_input("Course name", placeholder="Add course name")
         if st.form_submit_button("Create course", type="primary") and identifier.strip():
             shelf.add_course(identifier.strip(), title.strip() or identifier.strip())
             go(course=identifier.strip())
@@ -80,7 +80,7 @@ def _course_box(shelf: Library, course: dict[str, str]) -> None:
             f"{'Textbook indexed' if book else 'No textbook'} · "
             f"{len(lectures)} lecture{'s' if len(lectures) != 1 else ''}"
         )
-        if st.button("Open", key=f"open-{identifier}", use_container_width=True):
+        if st.button("Open", key=f"open-{identifier}", width="stretch"):
             go(course=identifier)
 
 
@@ -98,6 +98,21 @@ def course_page(shelf: Library, course: str) -> None:
     textbook_section(shelf, course)
     st.divider()
     lectures_section(shelf, course)
+    st.divider()
+    delete_course_section(shelf, course)
+
+
+def delete_course_section(shelf: Library, course: str) -> None:
+    """Deleting a course cannot be undone, so the id must be typed to confirm."""
+    with st.expander("Delete this course"):
+        st.warning(
+            "This deletes the textbook, every lecture with its slides and notes, and every "
+            "study document built for this course. It cannot be undone."
+        )
+        typed = st.text_input(f"Type {course} to confirm", key=f"confirm-{course}")
+        if st.button("Delete course", type="primary", disabled=typed.strip() != course):
+            shelf.delete_course(course)
+            go()
 
 
 def textbook_section(shelf: Library, course: str) -> None:
@@ -137,7 +152,7 @@ def _chapter_editor(shelf: Library, course: str) -> None:
             for c in chapters
         ],
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         key=f"ranges-{course}",
     )
     if st.button("Save ranges and re-index"):
@@ -177,7 +192,7 @@ def lectures_section(shelf: Library, course: str) -> None:
     with st.form("new_lecture", clear_on_submit=True):
         st.markdown("**New lecture**")
         left, right = st.columns([2, 2])
-        name = left.text_input("Name", placeholder="Week 3, Induction")
+        name = left.text_input("Lecture name", placeholder="Add lecture name")
         chapter = right.selectbox(
             "Textbook chapter",
             ["Find it automatically"] + list(chapters),
@@ -198,7 +213,7 @@ def _lecture_box(shelf: Library, course: str, lecture: Lecture) -> None:
             f"{lecture.note_count} note page{'s' if lecture.note_count != 1 else ''} · "
             f"{len(history)} run{'s' if len(history) != 1 else ''}"
         )
-        if action.button("Open", key=f"open-{lecture.id}", use_container_width=True):
+        if action.button("Open", key=f"open-{lecture.id}", width="stretch"):
             go(course=course, lecture=lecture.id)
 
 
@@ -221,55 +236,119 @@ def lecture_page(shelf: Library, course: str, lecture: Lecture) -> None:
 
 def uploads_section(shelf: Library, course: str, lecture: Lecture) -> None:
     st.subheader("Sources")
+    files = shelf.sources(course, lecture.id)
     left, right = st.columns(2)
-
     with left:
-        st.markdown("**Professor's lecture PDF**")
-        if lecture.slides_name:
-            st.success(lecture.slides_name)
-        else:
-            st.info("Nothing uploaded yet")
-        deck = st.file_uploader(
-            "Slides",
-            type=["pdf", "pptx"],
-            key=f"deck-{lecture.id}",
-            label_visibility="collapsed",
+        _source_column(
+            shelf,
+            course,
+            lecture,
+            kind="slides",
+            files=files["slides"],
+            heading="**Professor's lecture slides**",
+            types=["pdf", "pptx"],
+            caption="PDF or PowerPoint. Add more decks at any time; each is read once.",
         )
-        st.caption("The lecture deck, PDF or PowerPoint. Replacing it removes the old one.")
-        if deck is not None and st.button("Save slides", key=f"save-deck-{lecture.id}"):
-            shelf.replace_slides(course, lecture.id, deck.name, deck.getbuffer().tobytes())
+    with right:
+        _source_column(
+            shelf,
+            course,
+            lecture,
+            kind="notes",
+            files=files["notes"],
+            heading="**Your handwritten notes**",
+            types=["pdf"],
+            caption="PDFs of any length. Only a new or changed file goes through OCR.",
+        )
+
+
+def _source_column(
+    shelf: Library,
+    course: str,
+    lecture: Lecture,
+    *,
+    kind: str,
+    files: list[str],
+    heading: str,
+    types: list[str],
+    caption: str,
+) -> None:
+    """One kind of source: what is saved, a remove button each, and an uploader."""
+    st.markdown(heading)
+    if not files:
+        st.info("Nothing uploaded yet")
+    for name in files:
+        label, view, remove = st.columns([4, 1, 1])
+        label.success(name)
+        shown = f"view-{kind}-{lecture.id}-{name}"
+        if view.button("Hide" if st.session_state.get(shown) else "View", key=f"b{shown}"):
+            st.session_state[shown] = not st.session_state.get(shown, False)
+            st.rerun()
+        if remove.button("Remove", key=f"rm-{kind}-{lecture.id}-{name}"):
+            shelf.remove_source(course, lecture.id, kind, name)
+            st.session_state.pop(shown, None)
+            st.rerun()
+        if st.session_state.get(shown):
+            _source_view(shelf, course, lecture, kind, name)
+
+    # A new key after each save empties the uploader.
+    round_key = f"round-{kind}-{lecture.id}"
+    uploads = st.file_uploader(
+        kind.title(),
+        type=types,
+        accept_multiple_files=True,
+        key=f"{kind}-{lecture.id}-{st.session_state.get(round_key, 0)}",
+        label_visibility="collapsed",
+    )
+    st.caption(f"{caption} A file with the same name replaces the old one.")
+    if uploads and st.button(f"Save {kind}", key=f"save-{kind}-{lecture.id}"):
+        try:
+            for upload in uploads:
+                data = upload.getbuffer().tobytes()
+                if kind == "slides":
+                    shelf.add_slides(course, lecture.id, upload.name, data)
+                else:
+                    shelf.add_notes(course, lecture.id, upload.name, data)
+        except ServiceError as error:
+            st.error(str(error))
+        else:
+            st.session_state[round_key] = st.session_state.get(round_key, 0) + 1
             st.rerun()
 
-    with right:
-        st.markdown("**Your handwritten notes**")
-        if lecture.note_count:
-            st.success(f"{lecture.note_count} pages saved")
+
+def _source_view(shelf: Library, course: str, lecture: Lecture, kind: str, name: str) -> None:
+    """Which file this is, whether it has been read, and what was read from each page."""
+    view = shelf.source_details(course, lecture.id, kind, name)
+    with st.container(border=True):
+        if view.stored:
+            st.caption(f"{len(view.pages)} pages read and stored. The next build reuses them.")
         else:
-            st.info("Nothing uploaded yet")
-        notes = st.file_uploader(
-            "Notes",
-            type=["pdf"],
-            key=f"notes-{lecture.id}",
-            label_visibility="collapsed",
+            st.caption("Not read yet. It is read once, on the next build.")
+        st.download_button(
+            "Download the original",
+            view.path.read_bytes(),
+            file_name=view.path.name,
+            key=f"dl-{kind}-{lecture.id}-{name}",
         )
-        st.caption(
-            "One PDF of any length, a GoodNotes export or a scan. Replacing it removes the old one."
-        )
-        if notes is not None and st.button("Save notes", key=f"save-notes-{lecture.id}"):
-            try:
-                pages = shelf.replace_notes(
-                    course, lecture.id, notes.name, notes.getbuffer().tobytes()
-                )
-            except ServiceError as error:
-                st.error(str(error))
-            else:
-                st.success(f"{pages} pages saved, the previous notes removed.")
-                st.rerun()
+        if not view.pages:
+            return
+        number = 1
+        if len(view.pages) > 1:
+            number = st.slider("Page", 1, len(view.pages), 1, key=f"pg-{kind}-{lecture.id}-{name}")
+        page = view.pages[number - 1]
+        if kind == "notes" and number <= len(view.images):
+            picture, text = st.columns(2)
+            picture.image(view.images[number - 1], width="stretch")
+            text.markdown(page.markdown)
+            if page.corrected:
+                text.caption("Corrected by you at review.")
+        else:
+            st.markdown(page.markdown or "_No text on this slide._")
 
 
 def start_section(shelf: Library, course: str, lecture: Lecture) -> None:
     if not lecture.ready:
-        st.info("Upload both the slides and your notes PDF to build this lecture.")
+        st.info("Upload the slides and at least one notes PDF to build this lecture.")
         return
     if not lecture.chapter:
         st.caption(
@@ -412,7 +491,7 @@ def review(shelf: Library, run_id: str) -> None:
         with tab:
             left, right = st.columns(2)
             if Path(page.image_path).exists():
-                left.image(page.image_path, use_container_width=True)
+                left.image(page.image_path, width="stretch")
             text = right.text_area(
                 "Transcript", page.markdown, height=520, key=f"note-{run_id}-{page.page}"
             )
@@ -432,13 +511,16 @@ def finished(shelf: Library, run_id: str) -> None:
     markdown = shelf.document(record)
     if not markdown:
         st.warning("This run produced no document.")
+        if record.error:
+            st.error(record.error)
         return
 
     st.subheader("Your study document")
     highlight = st.toggle("Show where each passage came from", value=True)
     if highlight:
         st.caption(
-            "Highlighted passages came from the textbook and carry a page reference. "
+            "Highlighted passages came from the textbook and carry a page reference; blue "
+            "ones are model explanations, used only when the course has no textbook. "
             "**Check this:** marks where your notes and the slides disagree."
         )
     _downloads(shelf, record, markdown, stem=record.chapter or record.lecture, side_by_side=True)

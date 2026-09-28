@@ -7,9 +7,16 @@ Rules:
   one section per slide.
 - Remove duplication across sections without removing content. If two sections
   state the same property, state it once and cross-reference.
-- Write only the connective prose needed to join sections. Add no new facts.
+- Write only the connective prose needed to join sections. Add no new facts,
+  except the labelled answers to OPEN GAPS below.
 - Passages tagged [C: pages N-M] came from the textbook. Keep the tag exactly as
   written. It is the provenance record.
+- OPEN GAPS lists questions the slides and notes leave unanswered, in a course
+  with no textbook. Answer each one inside the section of its concept,
+  in at most {max_words} words, using only terms, notation and results already
+  on the slides. Introduce no new topic, theorem or technique. Begin each answer
+  with [M: model explanation, not from your sources] and keep that tag exactly
+  as written. If OPEN GAPS is empty, add nothing.
 - End with "## Topics I have no notes on", a short bullet list of concepts where
   covered_by_notes was false. Do not write "No notes taken" anywhere in the body.
 - Mathematics stays LaTeX. It is typeset when the document is rendered, so write
@@ -27,6 +34,9 @@ SECTIONS:
 
 CONCEPTS WITH NO NOTES:
 {uncovered}
+
+OPEN GAPS:
+{open_gaps}
 
 UNVERIFIED CLAIMS:
 {unverified}

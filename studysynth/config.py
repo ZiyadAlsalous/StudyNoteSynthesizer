@@ -100,6 +100,15 @@ class RetrievalSettings(BaseModel):
     max_textbook_fraction: float = Field(default=0.15, ge=0.0, le=1.0)
 
 
+class GapFillSettings(BaseModel):
+    """In a course with no textbook, the synthesis model fills the gaps itself,
+    labelled as model explanations and capped at max_words each. With a textbook,
+    only the textbook fills gaps."""
+
+    enabled: bool = True
+    max_words: int = Field(default=80, ge=10)
+
+
 class VerifySettings(BaseModel):
     max_rounds: int = 2
     flag_unverified: bool = True
@@ -135,6 +144,7 @@ class Settings(BaseSettings):
     chunks: ChunkSettings = ChunkSettings()
     notes: NoteSettings = NoteSettings()
     retrieval: RetrievalSettings = RetrievalSettings()
+    gap_fill: GapFillSettings = GapFillSettings()
     verify: VerifySettings = VerifySettings()
     pdf: PdfSettings = PdfSettings()
 

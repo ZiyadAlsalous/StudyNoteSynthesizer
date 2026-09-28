@@ -18,6 +18,7 @@ from ..models import RetrievalOutcome
 TEMPLATES = Path(__file__).resolve().parent.parent / "templates"
 
 TEXTBOOK_TAG = re.compile(r"\[C: pages (\d+)-(\d+)\]")
+MODEL_TAG = re.compile(r"\[M: model explanation, not from your sources\]")
 CHECK_THIS = re.compile(r"\*\*Check this:\*\*")
 
 
@@ -34,7 +35,8 @@ def _environment() -> Environment:
 
 
 def tag_provenance(markdown: str) -> str:
-    """Wrap textbook passages and recorded disagreements so CSS can colour them."""
+    """Wrap textbook passages, model explanations and recorded disagreements so CSS
+    can colour them."""
 
     def wrap(match: re.Match[str]) -> str:
         return (
@@ -43,10 +45,15 @@ def tag_provenance(markdown: str) -> str:
         )
 
     tagged = TEXTBOOK_TAG.sub(wrap, markdown)
+    tagged = MODEL_TAG.sub(
+        '<span class="src-m"><span class="ref">[model explanation, not from your sources]</span> ',
+        tagged,
+    )
     lines = []
     for line in tagged.splitlines():
-        if '<span class="src-c">' in line:
-            line = line + "</span>"
+        line += "</span>" * (
+            line.count('<span class="src-c">') + line.count('<span class="src-m">')
+        )
         if CHECK_THIS.search(line):
             line = f'<span class="check">{line}</span>'
         lines.append(line)

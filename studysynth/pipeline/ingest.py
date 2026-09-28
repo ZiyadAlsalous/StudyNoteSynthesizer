@@ -10,8 +10,8 @@ from pathlib import Path
 
 from ..clients.llm import LlmClient, PromptLibrary
 from ..config import Settings
-from ..models import ChapterRange, Chunk, ChunkType, NotePage, Parent, SlidePage
-from ..store import Places
+from ..models import ChapterRange, Chunk, ChunkType, NotePage, Parent, SlidePage, SourcePage
+from ..store import Catalogue, Places
 
 
 class IngestError(RuntimeError):
@@ -128,10 +128,11 @@ class TextbookIngestor:
 
     @staticmethod
     def _pages(pdf: Path) -> list[str]:
-        import pypdf
+        """PyMuPDF, not pypdf: pypdf scrambles text drawn in custom fonts."""
+        import pymupdf
 
-        reader = pypdf.PdfReader(str(pdf))
-        return [page.extract_text() or "" for page in reader.pages]
+        with pymupdf.open(str(pdf)) as document:  # type: ignore[no-untyped-call]
+            return [page.get_text() for page in document]
 
     def _sections(self, body: str, course: str, span: ChapterRange) -> list[Parent]:
         """Split on headings first, then size, never inside a table or formula.
@@ -261,14 +262,24 @@ class TextbookIngestor:
 
 
 class SlideIngestor:
-    """One slide is one chunk, with a `## Page N` marker kept for citation."""
+    """One slide is one chunk, with a `## Page N` marker kept for citation.
+
+    Each deck is read once. Its text is stored against a hash of the file, so a
+    later run reads it back and only a new or changed deck is parsed. Pages are
+    numbered straight through the decks in name order.
+    """
 
     FIGURE_TEXT_FLOOR = 40
+    KIND = "slides"
+    # Stored text is tagged with the reader that produced it, so changing the
+    # reader re-reads every deck once instead of trusting the old text.
+    READER = "pymupdf"
 
-    def __init__(self, client: LlmClient) -> None:
+    def __init__(self, client: LlmClient, catalogue: Catalogue) -> None:
         self._client = client
+        self._catalogue = catalogue
 
-    def ingest(self, source: Path) -> list[SlidePage]:
+    def ingest(self, source: Path, course: str = "", lecture: str = "") -> list[SlidePage]:
         if source.is_dir():
             decks = sorted(
                 path for path in source.iterdir() if path.suffix.lower() in {".pdf", ".pptx"}
@@ -279,23 +290,40 @@ class SlideIngestor:
             raise IngestError(f"No slide decks found at {source}")
         pages: list[SlidePage] = []
         for deck in decks:
-            pages.extend(self._pptx(deck) if deck.suffix.lower() == ".pptx" else self._pdf(deck))
+            for text in self._texts(deck, course, lecture):
+                pages.append(self._page(deck.stem, len(pages) + 1, text))
         return pages
 
-    def _pdf(self, deck: Path) -> list[SlidePage]:
-        import pypdf
+    def _texts(self, deck: Path, course: str, lecture: str) -> list[str]:
+        digest = f"{self.READER}:{content_hash(deck.read_bytes())}"
+        stored = self._catalogue.stored_pages(course, lecture, self.KIND, deck.name, digest)
+        if stored is not None:
+            return [page.markdown for page in stored]
+        texts = self._pptx(deck) if deck.suffix.lower() == ".pptx" else self._pdf(deck)
+        self._catalogue.store_pages(
+            course,
+            lecture,
+            self.KIND,
+            deck.name,
+            digest,
+            [SourcePage(page=number, markdown=text) for number, text in enumerate(texts, 1)],
+        )
+        return texts
 
-        reader = pypdf.PdfReader(str(deck))
-        return [
-            self._page(deck.stem, number, page.extract_text() or "")
-            for number, page in enumerate(reader.pages, start=1)
-        ]
+    @staticmethod
+    def _pdf(deck: Path) -> list[str]:
+        """PyMuPDF, not pypdf: pypdf scrambles text drawn in custom fonts."""
+        import pymupdf
 
-    def _pptx(self, deck: Path) -> list[SlidePage]:
+        with pymupdf.open(str(deck)) as document:  # type: ignore[no-untyped-call]
+            return [page.get_text() for page in document]
+
+    @staticmethod
+    def _pptx(deck: Path) -> list[str]:
         from pptx import Presentation
 
-        pages: list[SlidePage] = []
-        for number, slide in enumerate(Presentation(str(deck)).slides, start=1):
+        texts: list[str] = []
+        for slide in Presentation(str(deck)).slides:
             body = "\n".join(
                 shape.text_frame.text for shape in slide.shapes if shape.has_text_frame
             )
@@ -304,8 +332,8 @@ class SlideIngestor:
                 notes = slide.notes_slide.notes_text_frame.text
             if notes.strip():
                 body = f"{body}\n\n_Speaker notes:_ {notes.strip()}"
-            pages.append(self._page(deck.stem, number, body))
-        return pages
+            texts.append(body)
+        return texts
 
     def _page(self, deck: str, number: int, text: str) -> SlidePage:
         sparse = len(text.strip()) < self.FIGURE_TEXT_FLOOR
@@ -318,46 +346,89 @@ class SlideIngestor:
 
 
 class NoteIngestor:
-    """Handwriting to Markdown, cached by content hash."""
+    """Handwriting to Markdown, each page transcribed once.
 
-    def __init__(self, settings: Settings, client: LlmClient, places: Places) -> None:
+    Transcripts are stored against a hash of each notes PDF, so a later run reads
+    them back and only a new or changed PDF goes through OCR. A page already seen
+    in any file reuses its transcript, preferring the student's correction.
+    """
+
+    KIND = "notes"
+
+    def __init__(
+        self, settings: Settings, client: LlmClient, places: Places, catalogue: Catalogue
+    ) -> None:
         self._settings = settings
         self._client = client
         self._places = places
+        self._catalogue = catalogue
         self._prompts = PromptLibrary(settings.prompts_dir)
 
-    def ingest(self, source: Path) -> list[NotePage]:
-        images = self._images(source)
-        if not images:
+    def ingest(self, source: Path, course: str = "", lecture: str = "") -> list[NotePage]:
+        pdfs = self._pdfs(source)
+        if not pdfs:
             raise IngestError(f"No notes PDF found at {source}")
+
+        files: list[tuple[Path, str, list[Path], list[SourcePage] | None]] = []
+        for pdf in pdfs:
+            images = self.rasterise(pdf, pdf.parent / "pages")
+            digest = content_hash(pdf.read_bytes())
+            stored = self._catalogue.stored_pages(course, lecture, self.KIND, pdf.name, digest)
+            if stored is not None and len(stored) != len(images):
+                stored = None
+            files.append((pdf, digest, images, stored))
+
+        new_images = [image for _, _, images, stored in files if stored is None for image in images]
+        transcripts = dict(zip(new_images, self._transcribe(new_images), strict=True))
+
+        pages: list[NotePage] = []
+        for pdf, digest, images, stored in files:
+            if stored is None:
+                stored = [
+                    SourcePage(page=number, content_hash=hashed, markdown=text)
+                    for number, (hashed, text) in enumerate(
+                        (transcripts[image] for image in images), 1
+                    )
+                ]
+                self._catalogue.store_pages(course, lecture, self.KIND, pdf.name, digest, stored)
+            for image, page in zip(images, stored, strict=True):
+                pages.append(
+                    NotePage(
+                        page=len(pages) + 1,
+                        image_path=str(image),
+                        content_hash=page.content_hash,
+                        markdown=page.markdown,
+                    )
+                )
+        return pages
+
+    def _transcribe(self, images: list[Path]) -> list[tuple[str, str]]:
+        """Only pages never seen before reach the vision model."""
+        if not images:
+            return []
         prompt = self._prompts.render("ocr_notes")
 
-        def transcribe(numbered: tuple[int, Path]) -> NotePage:
-            number, image = numbered
+        def transcribe(image: Path) -> tuple[str, str]:
             digest = content_hash(image.read_bytes())
-            cache = self._places.note_cache(digest)
-            if cache.exists():
-                markdown = cache.read_text(encoding="utf-8")
-            else:
-                markdown = self._client.vision(prompt, image, job="ocr_notes")
-                cache.write_text(markdown, encoding="utf-8")
-            return NotePage(
-                page=number, image_path=str(image), content_hash=digest, markdown=markdown
-            )
+            known = self._catalogue.known_transcript(digest)
+            if known is not None:
+                return digest, known
+            return digest, self._client.vision(prompt, image, job="ocr_notes")
 
         workers = min(self._settings.notes.max_parallel_ocr, len(images))
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            return list(pool.map(transcribe, enumerate(images, start=1)))
+            return list(pool.map(transcribe, images))
+
+    @staticmethod
+    def _pdfs(source: Path) -> list[Path]:
+        """Notes are PDFs: GoodNotes exports or scans, of any length."""
+        if source.is_dir():
+            return sorted(p for p in source.iterdir() if p.suffix.lower() == ".pdf")
+        return [source]
 
     def _images(self, source: Path) -> list[Path]:
-        """Notes are always a PDF: a GoodNotes export or a scan, of any length."""
-        pdfs = (
-            sorted(p for p in source.iterdir() if p.suffix.lower() == ".pdf")
-            if source.is_dir()
-            else [source]
-        )
         images: list[Path] = []
-        for pdf in pdfs:
+        for pdf in self._pdfs(source):
             images.extend(self.rasterise(pdf, pdf.parent / "pages"))
         return images
 

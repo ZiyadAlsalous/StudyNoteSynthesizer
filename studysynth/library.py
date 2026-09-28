@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import uuid
 from collections.abc import Iterator, Sequence
@@ -14,9 +15,15 @@ from .clients import llm as llm_backends
 from .clients.embeddings import EmbeddingBackend
 from .clients.llm import LlmClient
 from .config import Settings
-from .models import ChapterRange, Lecture, NotePage, RetrievalOutcome, RunRecord
+from .models import ChapterRange, Lecture, NotePage, RetrievalOutcome, RunRecord, SourcePage
 from .pipeline.graph import EXTRACT_CONCEPTS, Nodes, Runner, note_pages
-from .pipeline.ingest import OutlineMissing, TextbookIngestor, chapter_ranges, slug
+from .pipeline.ingest import (
+    OutlineMissing,
+    TextbookIngestor,
+    chapter_ranges,
+    content_hash,
+    slug,
+)
 from .pipeline.render import RenderError, provenance_report, to_pdf
 from .pipeline.retrieval import TextbookGate
 from .store import Catalogue, Places, VectorStore
@@ -26,6 +33,16 @@ SLIDE_SUFFIXES = {".pdf", ".pptx"}
 
 class ServiceError(RuntimeError):
     pass
+
+
+@dataclass
+class SourceView:
+    """One uploaded file as the View button shows it."""
+
+    path: Path
+    pages: list[SourcePage]
+    stored: bool
+    images: list[str]
 
 
 @dataclass
@@ -118,26 +135,89 @@ class Library:
         shutil.rmtree(self.places.lecture(course, lecture_id), ignore_errors=True)
         self.catalogue.delete_lecture(course, lecture_id)
 
-    def replace_slides(self, course: str, lecture_id: str, name: str, data: bytes) -> None:
-        folder = self.places.slides_dir(course, lecture_id)
-        self.places.clear(folder)
-        (folder / _safe(name, SLIDE_SUFFIXES)).write_bytes(data)
-        self.catalogue.set_lecture_sources(course, lecture_id, slides_name=name, note_count=None)
+    def delete_course(self, course: str) -> None:
+        """Everything the course owns: textbook and index, lectures and their sources,
+        and every run with its documents, rejection log and saved state."""
+        for run_id in self.catalogue.delete_course(course):
+            shutil.rmtree(self.places.run(run_id), ignore_errors=True)
+            self.runner.forget(run_id)
+        self.vectors.drop(course)
+        shutil.rmtree(self.places.course(course), ignore_errors=True)
 
-    def replace_notes(self, course: str, lecture_id: str, name: str, data: bytes) -> int:
-        """Notes are one PDF of any length. Replacing it removes the previous one,
-        so a run never mixes two versions of a page."""
+    def add_slides(self, course: str, lecture_id: str, name: str, data: bytes) -> None:
+        """Adds a deck beside the others. The same file name replaces that deck."""
+        folder = self.places.slides_dir(course, lecture_id)
+        (folder / _safe(name, SLIDE_SUFFIXES)).write_bytes(data)
+        self._refresh(course, lecture_id)
+
+    def add_notes(self, course: str, lecture_id: str, name: str, data: bytes) -> int:
+        """Adds a notes PDF beside the others and returns its page count. The same
+        file name replaces that PDF and its rendered pages, so a run never mixes
+        two versions of a page."""
         if Path(name).suffix.lower() != ".pdf":
             raise ServiceError(f"{name} must be a PDF")
         folder = self.places.notes_dir(course, lecture_id)
-        self.places.clear(folder)
-        shutil.rmtree(folder / "pages", ignore_errors=True)
-        target = folder / "notes.pdf"
+        target = folder / _safe(name, {".pdf"})
+        self._drop_rendered(target)
         target.write_bytes(data)
-
         pages = self._page_count(target)
-        self.catalogue.set_lecture_sources(course, lecture_id, slides_name=None, note_count=pages)
+        self._refresh(course, lecture_id)
         return pages
+
+    def sources(self, course: str, lecture_id: str) -> dict[str, list[str]]:
+        """The uploaded file names, by kind."""
+        return {
+            kind: sorted(p.name for p in folder.iterdir() if p.is_file())
+            for kind, folder in (
+                ("slides", self.places.slides_dir(course, lecture_id)),
+                ("notes", self.places.notes_dir(course, lecture_id)),
+            )
+        }
+
+    def remove_source(self, course: str, lecture_id: str, kind: str, name: str) -> None:
+        """Deletes the file, its rendered pages and everything extracted from it."""
+        folder = (
+            self.places.slides_dir(course, lecture_id)
+            if kind == "slides"
+            else self.places.notes_dir(course, lecture_id)
+        )
+        target = folder / Path(name).name
+        self._drop_rendered(target)
+        target.unlink(missing_ok=True)
+        self.catalogue.forget_source(course, lecture_id, kind, target.name)
+        self._refresh(course, lecture_id)
+
+    def source_details(self, course: str, lecture_id: str, kind: str, name: str) -> SourceView:
+        """What the View button shows: the file, its pages, and what is already stored."""
+        folder = (
+            self.places.slides_dir(course, lecture_id)
+            if kind == "slides"
+            else self.places.notes_dir(course, lecture_id)
+        )
+        path = folder / Path(name).name
+        stored = self.catalogue.stored_pages(
+            course, lecture_id, kind, path.name, content_hash(path.read_bytes())
+        )
+        images: list[str] = []
+        if kind == "notes":
+            images = [str(p) for p in sorted((folder / "pages").glob(f"{path.stem}-page*.png"))]
+        return SourceView(path=path, pages=stored or [], stored=stored is not None, images=images)
+
+    @staticmethod
+    def _drop_rendered(pdf: Path) -> None:
+        for image in (pdf.parent / "pages").glob(f"{pdf.stem}-page*.png"):
+            image.unlink()
+
+    def _refresh(self, course: str, lecture_id: str) -> None:
+        """Keeps the lecture's summary in step with its folders."""
+        files = self.sources(course, lecture_id)
+        notes = self.places.notes_dir(course, lecture_id)
+        self.catalogue.set_lecture_sources(
+            course,
+            lecture_id,
+            slides_name=", ".join(files["slides"]),
+            note_count=sum(self._page_count(notes / name) for name in files["notes"]),
+        )
 
     @staticmethod
     def _page_count(pdf: Path) -> int:
@@ -177,6 +257,15 @@ class Library:
     def resume(
         self, run_id: str, notes: Sequence[NotePage | dict[str, Any]] | None
     ) -> Iterator[tuple[str, Any]]:
+        """Continues past the review, keeping the student's corrections for later runs."""
+        if notes is not None:
+            record = self.catalogue.run(run_id)
+            for page in notes:
+                typed = page if isinstance(page, NotePage) else NotePage.model_validate(page)
+                if typed.edited_by_student:
+                    self.catalogue.save_correction(
+                        record.course, record.lecture, typed.content_hash, typed.markdown
+                    )
         self.runner.approve_notes(run_id, notes)
         return self.runner.stream(run_id)
 
@@ -231,7 +320,9 @@ def build(settings: Settings) -> Library:
 
 
 def _safe(name: str, allowed: set[str]) -> str:
+    """The uploaded name, kept readable but stripped of anything a path could abuse."""
     suffix = Path(name).suffix.lower()
     if suffix not in allowed:
         raise ServiceError(f"{name} must be one of {sorted(allowed)}")
-    return f"deck{suffix}"
+    stem = re.sub(r"[^A-Za-z0-9 ._-]", "_", Path(name).stem).strip(" .") or "file"
+    return f"{stem}{suffix}"

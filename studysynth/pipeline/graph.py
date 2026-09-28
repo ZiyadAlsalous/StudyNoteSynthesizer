@@ -70,14 +70,16 @@ class Nodes:
         self._catalogue = catalogue
         self._places = places
         self._prompts = PromptLibrary(settings.prompts_dir)
-        self._slides = SlideIngestor(llm)
-        self._notes = NoteIngestor(settings, llm, places)
+        self._slides = SlideIngestor(llm, catalogue)
+        self._notes = NoteIngestor(settings, llm, places, catalogue)
 
     def ingest_slides(self, state: GraphState) -> dict[str, Any]:
-        return {"slides": self._slides.ingest(Path(state["slides_dir"]))}
+        source = Path(state["slides_dir"])
+        return {"slides": self._slides.ingest(source, state["course"], state.get("lecture", ""))}
 
     def ingest_notes(self, state: GraphState) -> dict[str, Any]:
-        return {"notes": self._notes.ingest(Path(state["notes_dir"]))}
+        source = Path(state["notes_dir"])
+        return {"notes": self._notes.ingest(source, state["course"], state.get("lecture", ""))}
 
     def extract_concepts(self, state: GraphState) -> dict[str, Any]:
         prompt = self._prompts.render(
@@ -188,6 +190,18 @@ class Nodes:
         uncovered = [
             concept.name for concept in state.get("concepts", []) if not concept.covered_by_notes
         ]
+        # With a textbook, only the textbook fills gaps. Without one, the model
+        # fills them, labelled and capped.
+        names = {concept.id: concept.name for concept in state.get("concepts", [])}
+        fill = self._settings.gap_fill
+        open_gaps = (
+            [
+                f"- {names.get(gap.concept_id, 'General')}: {gap.question}"
+                for gap in state.get("gaps", [])
+            ]
+            if fill.enabled and not outcome.has_textbook
+            else []
+        )
         unverified = state.get("unverified", []) if state.get("verify_rounds") else []
         prompt = self._prompts.render(
             "synthesize_chapter",
@@ -195,6 +209,8 @@ class Nodes:
                 "chapter": state["chapter"],
                 "sections": _join(sections),
                 "uncovered": _join(f"- {name}" for name in uncovered),
+                "open_gaps": "\n".join(open_gaps),
+                "max_words": str(fill.max_words),
                 "unverified": _join(f"- {claim}" for claim in unverified),
             },
         )
@@ -308,6 +324,11 @@ class Runner:
             app = self._graph().compile(checkpointer=saver, interrupt_before=[EXTRACT_CONCEPTS])
             config: RunnableConfig = {"configurable": {"thread_id": run_id}}
             return tuple(app.get_state(config).next)
+
+    def forget(self, run_id: str) -> None:
+        """Deletes a run's checkpointed state, which holds the note transcripts."""
+        with self._saver() as saver:
+            saver.delete_thread(run_id)
 
     def approve_notes(
         self, run_id: str, edited: Sequence[NotePage | dict[str, Any]] | None = None

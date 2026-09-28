@@ -15,15 +15,17 @@ Everything runs on your own machine with your own API key. Your notes never leav
 ## Features
 
 - **Three ranked sources.** The slides are authoritative because the professor sets the exam. Your notes add intuition and worked reasoning. The textbook is a gap filler that never sets scope.
+- **Gaps are filled even without a textbook.** With a textbook, only the textbook fills gaps, through the seven controls. A course with no textbook has its gaps filled by the model while it writes the document: briefly, at the level of the slides, capped at 80 words each (`gap_fill.max_words`) and labelled *model explanation, not from your sources*. The verify step flags one only if it contradicts the slides or notes.
 - **Disagreements surfaced, not corrected.** Where your notes and the slides conflict on a fact, both appear inline under a **Check this:** marker. You need to see what you misunderstood.
 - **Seven anti-bloat controls.** The product, described under Architecture.
 - **Human review interrupt.** The graph stops after OCR so you can fix the transcription beside the page it came from, because handwriting is the least reliable thing the system reads.
 - **Crash-resumable runs.** A SQLite checkpointer means a failed run resumes at the node that failed instead of re-transcribing everything.
+- **Every upload is read once.** Slide text and note transcripts are stored in SQLite against a hash of each file. Add a deck or a notes PDF and only that file goes through PyMuPDF or OCR; remove it and everything taken from it goes too. Corrections made at review are kept for the next run, and a View button shows what each file contributed. Deleting a course removes everything it owns: sources, index, documents and saved run state.
 - **Typeset mathematics.** LaTeX is preserved from OCR all the way through, then rendered by pandoc and a TeX engine, so the PDF shows real summations and fractions rather than `$` and backslashes.
 - **The textbook is embedded once.** Parsed, chunked and written to an on-disk vector index per course. Later runs query that index rather than re-embedding the book.
 - **Provenance on every passage.** A toggle colours the document by source, and every run keeps a report of what the gate rejected and why.
 - **Prompts are files, not code.** All nine live in `studysynth/prompts/` as Markdown you can edit without touching Python.
-- **Runs offline for development.** A mock backend replays recorded fixtures, so the whole pipeline and all 57 tests run with no API key and no cost.
+- **Runs offline for development.** A mock backend replays recorded fixtures, so the whole pipeline and all 74 tests run with no API key and no cost.
 
 ## Architecture
 
@@ -32,7 +34,7 @@ Slides (PDF/PPTX)          Notes (PDF)            Textbook (PDF, optional)
       │                         │                          │
       ▼                         ▼                          ▼
  page extraction          vision OCR              outline to chapters
-      │                (cached by content hash)   structural chunking
+      │                (each file read once)      structural chunking
       │                         │                 parent/child split
       └────────────┬────────────┘                          │
                    ▼                                       ▼
@@ -151,7 +153,7 @@ Only one copy can run at a time, because the index is an embedded single-process
 ```bash
 STUDYSYNTH_LLM__BACKEND=mock STUDYSYNTH_EMBEDDINGS__BACKEND=mock python -m studysynth ui
 
-pytest         # 57 tests: the seven controls, a full mock run, persistence
+pytest         # 74 tests: the seven controls, a full mock run, persistence
 mypy           # strict, 19 modules
 ruff check .   # lint
 ```
@@ -167,7 +169,7 @@ StudyNoteSynthesizer/
 │   ├── library.py           # Everything the interface calls, wired once
 │   ├── ui.py                # The whole interface: home, course, lecture
 │   ├── store/               # Persistence
-│   │   ├── catalogue.py     #   SQLite: courses, lectures, runs, rejections
+│   │   ├── catalogue.py     #   SQLite: courses, lectures, runs, rejections, sources
 │   │   ├── files.py         #   Disk layout, the only module that picks paths
 │   │   └── vectors.py       #   Qdrant: one collection per course
 │   ├── clients/             # The two external services, each behind an interface
@@ -181,7 +183,7 @@ StudyNoteSynthesizer/
 │   ├── prompts/             # All nine prompts as Markdown. Never inlined.
 │   └── templates/           # Document HTML, print CSS, provenance report
 ├── fixtures/llm/            # Recorded responses, so tests run offline and free
-└── tests/                   # 57 tests
+└── tests/                   # 74 tests
 ```
 
 Everything you upload and everything the app produces lives under `data/`: the SQLite catalogue, the vector index, your files, and one folder per run holding its PDF, its Markdown and its provenance report. `data/` and `.env` are both gitignored, so your notes and your key never reach GitHub.
@@ -192,7 +194,7 @@ Everything you upload and everything the app produces lives under `data/`: the S
 - [ ] Per-job token accounting, so cost per run is measured rather than estimated
 - [ ] Tune the vector floor against real Qwen scores and switch it on
 - [ ] Re-tune the 0.82 novelty threshold against real Qwen scores; it was set on the mock embedder, which measures shared words rather than meaning
-- [ ] A layout-aware parser, so structural chunking sees real headings instead of the flat text `pypdf` returns
+- [ ] A layout-aware parser, so structural chunking sees real headings instead of the flat text PyMuPDF returns
 - [ ] An offline eval: coverage, bloat rate and citation validity against a hand-labelled chapter
 
 ## Contact
