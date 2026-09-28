@@ -13,7 +13,7 @@ import pytest
 from studysynth.library import build
 from studysynth.models import Reason, Rejection
 from studysynth.pipeline.ingest import NoteIngestor, SlideIngestor
-from studysynth.store import Catalogue, Places
+from studysynth.store import Catalogue
 
 from .conftest import StubLlm, mock_settings
 from .samples import write_pdf
@@ -27,7 +27,7 @@ def parts(tmp_path: Path) -> dict[str, object]:
     return {
         "llm": llm,
         "catalogue": catalogue,
-        "notes": NoteIngestor(settings, llm, Places(settings), catalogue),
+        "notes": NoteIngestor(settings, llm, catalogue),
         "slides": SlideIngestor(llm, catalogue),
         "folder": tmp_path / "notes",
         "decks": tmp_path / "slides",
@@ -113,9 +113,7 @@ def test_removing_a_file_deletes_its_pages_and_stored_text(shelf, tmp_path):
     pdf = write_pdf(tmp_path / "a.pdf", [["one"], ["two"]])
     shelf.add_notes("cs3340", "week-3", "a.pdf", pdf.read_bytes())
     folder = shelf.places.notes_dir("cs3340", "week-3")
-    NoteIngestor(shelf.settings, StubLlm(), shelf.places, shelf.catalogue).ingest(
-        folder, "cs3340", "week-3"
-    )
+    NoteIngestor(shelf.settings, StubLlm(), shelf.catalogue).ingest(folder, "cs3340", "week-3")
     assert list((folder / "pages").glob("a-page*.png"))
 
     shelf.remove_source("cs3340", "week-3", "notes", "a.pdf")
@@ -135,7 +133,6 @@ def test_view_shows_whether_a_file_has_been_read(shelf, tmp_path):
     NoteIngestor(
         shelf.settings,
         StubLlm({"ocr_notes": {"a-page0001.png": "one"}}),
-        shelf.places,
         shelf.catalogue,
     ).ingest(folder, "cs3340", "week-3")
     after = shelf.source_details("cs3340", "week-3", "notes", "a.pdf")
@@ -154,7 +151,7 @@ def test_review_corrections_are_saved_for_the_next_run(shelf, tmp_path, monkeypa
     pdf = write_pdf(tmp_path / "a.pdf", [["one"]])
     shelf.add_notes("cs3340", "week-3", "a.pdf", pdf.read_bytes())
     folder = shelf.places.notes_dir("cs3340", "week-3")
-    page = NoteIngestor(shelf.settings, StubLlm(), shelf.places, shelf.catalogue).ingest(
+    page = NoteIngestor(shelf.settings, StubLlm(), shelf.catalogue).ingest(
         folder, "cs3340", "week-3"
     )[0]
     shelf.catalogue.start_run("r1", "cs3340", "induction", "week-3")

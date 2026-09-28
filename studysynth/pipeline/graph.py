@@ -23,7 +23,7 @@ from ..models import (
     RetrievalOutcome,
     Source,
 )
-from ..store import Catalogue, Places
+from ..store import Catalogue
 from .ingest import NoteIngestor, SlideIngestor
 from .retrieval import TextbookGate
 
@@ -62,16 +62,14 @@ class Nodes:
         llm: LlmClient,
         gate: TextbookGate,
         catalogue: Catalogue,
-        places: Places,
     ) -> None:
         self._settings = settings
         self._llm = llm
         self._gate = gate
         self._catalogue = catalogue
-        self._places = places
         self._prompts = PromptLibrary(settings.prompts_dir)
         self._slides = SlideIngestor(llm, catalogue)
-        self._notes = NoteIngestor(settings, llm, places, catalogue)
+        self._notes = NoteIngestor(settings, llm, catalogue)
 
     def ingest_slides(self, state: GraphState) -> dict[str, Any]:
         source = Path(state["slides_dir"])
@@ -337,10 +335,9 @@ class Runner:
         with self._saver() as saver:
             app = self._graph().compile(checkpointer=saver, interrupt_before=[EXTRACT_CONCEPTS])
             config: RunnableConfig = {"configurable": {"thread_id": run_id}}
-            update: dict[str, Any] = {"notes_approved": True}
             if edited is not None:
-                update["notes"] = [
+                notes = [
                     page if isinstance(page, NotePage) else NotePage.model_validate(page)
                     for page in edited
                 ]
-            app.update_state(config, update, as_node=INGEST_NOTES)
+                app.update_state(config, {"notes": notes}, as_node=INGEST_NOTES)

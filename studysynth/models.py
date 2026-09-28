@@ -17,11 +17,6 @@ class Source(StrEnum):
     TEXTBOOK = "C"
 
 
-class ChunkType(StrEnum):
-    PROSE = "prose"
-    TABLE = "table"
-
-
 class GapKind(StrEnum):
     UNDEFINED = "undefined"
     UNSUPPORTED = "unsupported"
@@ -76,7 +71,6 @@ class Chunk(BaseModel):
     page_start: int
     page_end: int
     parent_id: str
-    chunk_type: ChunkType = ChunkType.PROSE
     token_estimate: int = 0
 
 
@@ -98,7 +92,6 @@ class SlidePage(BaseModel):
     page: int
     deck: str
     markdown: str
-    is_figure_only: bool = False
 
 
 class SourcePage(BaseModel):
@@ -152,9 +145,7 @@ class Candidate(BaseModel):
     page_end: int
     chapter: str
     retrieval_score: float = 0.0
-    relevance: float | None = None
     necessity: float | None = None
-    draft_similarity: float | None = None
     token_estimate: int = 0
 
 
@@ -224,7 +215,6 @@ class GraphState(TypedDict, total=False):
 
     slides: list[SlidePage]
     notes: list[NotePage]
-    notes_approved: bool
 
     concepts: list[Concept]
     gaps: list[Gap]

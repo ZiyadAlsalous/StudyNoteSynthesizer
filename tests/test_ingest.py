@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pypdf
+import pymupdf
 import pytest
 
 from studysynth.config import Settings
@@ -22,24 +22,23 @@ from .samples import write_pdf
 def nested_textbook(tmp_path: Path) -> Path:
     """A book shaped like a real one: parts, chapters, and subsections."""
     source = write_pdf(tmp_path / "flat.pdf", [[f"page {n} body text"] for n in range(1, 21)])
-    reader = pypdf.PdfReader(str(source))
-    writer = pypdf.PdfWriter()
-    for page in reader.pages:
-        writer.add_page(page)
-
-    part = writer.add_outline_item("I Foundations", 0)
-    chapter_one = writer.add_outline_item("1 The Role of Algorithms", 1, parent=part)
-    writer.add_outline_item("1.1 Algorithms", 2, parent=chapter_one)
-    writer.add_outline_item("1.2 Algorithms as a technology", 4, parent=chapter_one)
-    chapter_two = writer.add_outline_item("2 Getting Started", 9, parent=part)
-    writer.add_outline_item("2.1 Insertion sort", 10, parent=chapter_two)
-    writer.add_outline_item("2.2 Analyzing algorithms", 13, parent=chapter_two)
-    chapter_three = writer.add_outline_item("3 Divide-and-Conquer", 15, parent=part)
-    writer.add_outline_item("3.1 Multiplying matrices", 16, parent=chapter_three)
-
     target = tmp_path / "textbook.pdf"
-    with target.open("wb") as handle:
-        writer.write(handle)
+    with pymupdf.open(str(source)) as document:
+        # [level, title, page], pages counted from 1.
+        document.set_toc(
+            [
+                [1, "I Foundations", 1],
+                [2, "1 The Role of Algorithms", 2],
+                [3, "1.1 Algorithms", 3],
+                [3, "1.2 Algorithms as a technology", 5],
+                [2, "2 Getting Started", 10],
+                [3, "2.1 Insertion sort", 11],
+                [3, "2.2 Analyzing algorithms", 14],
+                [2, "3 Divide-and-Conquer", 16],
+                [3, "3.1 Multiplying matrices", 17],
+            ]
+        )
+        document.save(str(target))
     return target
 
 
@@ -151,3 +150,26 @@ def test_parents_and_children_respect_the_configured_limits(nested_textbook):
     assert max(p.token_estimate for p in parents) <= settings.chunks.parent_tokens
     assert max(c.token_estimate for c in chunks) <= settings.chunks.child_tokens
     assert all(c.parent_id in {p.id for p in parents} for c in chunks)
+
+
+def test_repeated_chapter_titles_get_distinct_ids(tmp_path):
+    """Every part of a real textbook opened with 'Introduction'; they collapsed into one."""
+    source = write_pdf(tmp_path / "flat.pdf", [[f"page {n}"] for n in range(1, 13)])
+    target = tmp_path / "book.pdf"
+    with pymupdf.open(str(source)) as document:
+        document.set_toc(
+            [
+                [1, "I Foundations", 1],
+                [2, "Introduction", 1],
+                [2, "1 First", 2],
+                [2, "2 Second", 4],
+                [1, "II Sorting", 6],
+                [2, "Introduction", 6],
+                [2, "3 Third", 7],
+                [2, "4 Fourth", 9],
+            ]
+        )
+        document.save(str(target))
+    ids = [r.chapter for r in chapter_ranges(target)]
+    assert len(ids) == len(set(ids)) == 6
+    assert "introduction" in ids and "introduction-p6" in ids

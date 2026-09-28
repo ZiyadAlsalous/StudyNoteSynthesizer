@@ -60,7 +60,7 @@ class Library:
 
     def __post_init__(self) -> None:
         gate = TextbookGate(self.settings, self.llm, self.embeddings, self.vectors, self.catalogue)
-        nodes = Nodes(self.settings, self.llm, gate, self.catalogue, self.places)
+        nodes = Nodes(self.settings, self.llm, gate, self.catalogue)
         self.runner = Runner(self.settings, nodes)
 
     def courses(self) -> list[dict[str, str]]:
@@ -81,9 +81,7 @@ class Library:
         try:
             ranges = chapter_ranges(pdf)
         except OutlineMissing:
-            import pypdf
-
-            pages = len(pypdf.PdfReader(str(pdf)).pages)
+            pages = self._page_count(pdf)
             ranges = [
                 ChapterRange(
                     chapter="whole-book",

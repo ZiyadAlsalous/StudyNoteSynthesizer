@@ -207,9 +207,8 @@ class TextbookGate:
                 key=candidate.parent_id,
                 effort=self._settings.llm.grading_effort,
             )
-            graded = candidate.model_copy(update={"relevance": verdict.score})
             if verdict.score >= self._config.min_relevance:
-                return graded, None
+                return candidate, None
             return None, Rejection(
                 candidate_id=candidate.id,
                 gap_id=candidate.gap_id,
@@ -276,9 +275,8 @@ class TextbookGate:
             scores = matrix @ vector
             best = int(np.argmax(scores))
             similarity = float(scores[best])
-            graded = candidate.model_copy(update={"draft_similarity": similarity})
             if similarity <= self._config.max_similarity_to_draft:
-                kept.append(graded)
+                kept.append(candidate)
             else:
                 rejected.append(
                     Rejection(

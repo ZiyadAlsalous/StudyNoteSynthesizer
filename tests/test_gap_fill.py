@@ -8,7 +8,7 @@ from __future__ import annotations
 from studysynth.models import Admitted, RetrievalOutcome
 from studysynth.pipeline.graph import Nodes
 from studysynth.pipeline.render import tag_provenance
-from studysynth.store import Catalogue, Places
+from studysynth.store import Catalogue
 
 from .conftest import StubLlm, make_concept, make_draft, make_gap
 
@@ -25,7 +25,7 @@ class RecordingLlm(StubLlm):
 
 def synthesis_prompt(settings, admitted_gap: str | None, has_textbook: bool) -> str:
     llm = RecordingLlm()
-    nodes = Nodes(settings, llm, None, Catalogue(settings.paths.catalogue), Places(settings))
+    nodes = Nodes(settings, llm, None, Catalogue(settings.paths.catalogue))
     filled = make_gap("gap-filled")
     open_gap = make_gap("gap-open").model_copy(update={"question": "Why is the base case needed?"})
     admitted = (

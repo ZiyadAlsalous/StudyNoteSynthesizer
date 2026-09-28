@@ -10,8 +10,8 @@ from pathlib import Path
 
 from ..clients.llm import LlmClient, PromptLibrary
 from ..config import Settings
-from ..models import ChapterRange, Chunk, ChunkType, NotePage, Parent, SlidePage, SourcePage
-from ..store import Catalogue, Places
+from ..models import ChapterRange, Chunk, NotePage, Parent, SlidePage, SourcePage
+from ..store import Catalogue
 
 
 class IngestError(RuntimeError):
@@ -43,18 +43,24 @@ def content_hash(data: bytes) -> str:
 
 
 def chapter_ranges(pdf: Path, level: int | None = None) -> list[ChapterRange]:
-    """Read chapter boundaries from the PDF outline."""
-    import pypdf
+    """Read chapter boundaries from the PDF's bookmarks (its outline)."""
+    import pymupdf
 
-    reader = pypdf.PdfReader(str(pdf))
-
-    entries = _flatten(reader.outline, reader)
+    with pymupdf.open(str(pdf)) as document:  # type: ignore[no-untyped-call]
+        total = int(document.page_count)
+        # get_toc gives [level, title, page]; levels start at 1, pages at 1, and a
+        # bookmark with no target page is -1.
+        entries = [
+            (int(depth) - 1, str(title), int(page))
+            for depth, title, page in document.get_toc()
+            if int(page) > 0
+        ]
     if not entries:
         raise OutlineMissing(f"{pdf.name} has no outline; set page ranges manually")
 
     depth = level if level is not None else _chapter_depth(entries)
-    total = len(reader.pages)
     ranges: list[ChapterRange] = []
+    used: set[str] = set()
     for index, (own_depth, title, start) in enumerate(entries):
         if own_depth != depth:
             continue
@@ -63,31 +69,21 @@ def chapter_ranges(pdf: Path, level: int | None = None) -> list[ChapterRange]:
             if later_depth <= depth:
                 end = later_start - 1
                 break
+        # Titles repeat (every part of a book may open with "Introduction"), so a
+        # repeated id gets its start page to keep each chapter distinct.
+        identifier = slug(title) or "chapter"
+        if identifier in used:
+            identifier = f"{identifier}-p{start}"
+        used.add(identifier)
         ranges.append(
             ChapterRange(
-                chapter=slug(title) or "chapter",
+                chapter=identifier,
                 title=title.strip(),
                 page_start=start,
                 page_end=max(start, end),
             )
         )
     return ranges
-
-
-def _flatten(outline: object, reader: object, depth: int = 0) -> list[tuple[int, str, int]]:
-    from pypdf.generic import Destination
-
-    found: list[tuple[int, str, int]] = []
-    if not isinstance(outline, list):
-        return found
-    for item in outline:
-        if isinstance(item, list):
-            found.extend(_flatten(item, reader, depth + 1))
-        elif isinstance(item, Destination):
-            page = reader.get_destination_page_number(item)  # type: ignore[attr-defined]
-            if page is not None:
-                found.append((depth, str(item.title), int(page) + 1))
-    return found
 
 
 def _chapter_depth(entries: list[tuple[int, str, int]]) -> int:
@@ -128,7 +124,6 @@ class TextbookIngestor:
 
     @staticmethod
     def _pages(pdf: Path) -> list[str]:
-        """PyMuPDF, not pypdf: pypdf scrambles text drawn in custom fonts."""
         import pymupdf
 
         with pymupdf.open(str(pdf)) as document:  # type: ignore[no-untyped-call]
@@ -254,7 +249,6 @@ class TextbookIngestor:
                     page_start=parent.page_start,
                     page_end=parent.page_end,
                     parent_id=parent.id,
-                    chunk_type=ChunkType.TABLE if _TABLE_ROW.search(piece) else ChunkType.PROSE,
                     token_estimate=estimate_tokens(piece),
                 )
             )
@@ -269,7 +263,6 @@ class SlideIngestor:
     numbered straight through the decks in name order.
     """
 
-    FIGURE_TEXT_FLOOR = 40
     KIND = "slides"
     # Stored text is tagged with the reader that produced it, so changing the
     # reader re-reads every deck once instead of trusting the old text.
@@ -291,7 +284,12 @@ class SlideIngestor:
         pages: list[SlidePage] = []
         for deck in decks:
             for text in self._texts(deck, course, lecture):
-                pages.append(self._page(deck.stem, len(pages) + 1, text))
+                number = len(pages) + 1
+                pages.append(
+                    SlidePage(
+                        page=number, deck=deck.stem, markdown=f"## Page {number}\n\n{text.strip()}"
+                    )
+                )
         return pages
 
     def _texts(self, deck: Path, course: str, lecture: str) -> list[str]:
@@ -335,15 +333,6 @@ class SlideIngestor:
             texts.append(body)
         return texts
 
-    def _page(self, deck: str, number: int, text: str) -> SlidePage:
-        sparse = len(text.strip()) < self.FIGURE_TEXT_FLOOR
-        return SlidePage(
-            page=number,
-            deck=deck,
-            markdown=f"## Page {number}\n\n{text.strip()}",
-            is_figure_only=sparse,
-        )
-
 
 class NoteIngestor:
     """Handwriting to Markdown, each page transcribed once.
@@ -355,12 +344,9 @@ class NoteIngestor:
 
     KIND = "notes"
 
-    def __init__(
-        self, settings: Settings, client: LlmClient, places: Places, catalogue: Catalogue
-    ) -> None:
+    def __init__(self, settings: Settings, client: LlmClient, catalogue: Catalogue) -> None:
         self._settings = settings
         self._client = client
-        self._places = places
         self._catalogue = catalogue
         self._prompts = PromptLibrary(settings.prompts_dir)
 
@@ -425,12 +411,6 @@ class NoteIngestor:
         if source.is_dir():
             return sorted(p for p in source.iterdir() if p.suffix.lower() == ".pdf")
         return [source]
-
-    def _images(self, source: Path) -> list[Path]:
-        images: list[Path] = []
-        for pdf in self._pdfs(source):
-            images.extend(self.rasterise(pdf, pdf.parent / "pages"))
-        return images
 
     def rasterise(self, pdf: Path, target: Path) -> list[Path]:
         """A vision model needs pixels, so each page is rendered to a PNG."""

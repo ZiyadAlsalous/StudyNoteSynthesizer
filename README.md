@@ -25,7 +25,7 @@ Everything runs on your own machine with your own API key. Your notes never leav
 - **The textbook is embedded once.** Parsed, chunked and written to an on-disk vector index per course. Later runs query that index rather than re-embedding the book.
 - **Provenance on every passage.** A toggle colours the document by source, and every run keeps a report of what the gate rejected and why.
 - **Prompts are files, not code.** All nine live in `studysynth/prompts/` as Markdown you can edit without touching Python.
-- **Runs offline for development.** A mock backend replays recorded fixtures, so the whole pipeline and all 74 tests run with no API key and no cost.
+- **Runs offline for development.** A mock backend replays recorded fixtures, so the whole pipeline and all 75 tests run with no API key and no cost.
 
 ## Architecture
 
@@ -153,7 +153,7 @@ Only one copy can run at a time, because the index is an embedded single-process
 ```bash
 STUDYSYNTH_LLM__BACKEND=mock STUDYSYNTH_EMBEDDINGS__BACKEND=mock python -m studysynth ui
 
-pytest         # 74 tests: the seven controls, a full mock run, persistence
+pytest         # 75 tests: the seven controls, a full mock run, persistence
 mypy           # strict, 19 modules
 ruff check .   # lint
 ```
@@ -183,7 +183,7 @@ StudyNoteSynthesizer/
 │   ├── prompts/             # All nine prompts as Markdown. Never inlined.
 │   └── templates/           # Document HTML, print CSS, provenance report
 ├── fixtures/llm/            # Recorded responses, so tests run offline and free
-└── tests/                   # 74 tests
+└── tests/                   # 75 tests
 ```
 
 Everything you upload and everything the app produces lives under `data/`: the SQLite catalogue, the vector index, your files, and one folder per run holding its PDF, its Markdown and its provenance report. `data/` and `.env` are both gitignored, so your notes and your key never reach GitHub.

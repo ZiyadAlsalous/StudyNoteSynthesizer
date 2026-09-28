@@ -17,7 +17,7 @@ from studysynth.models import ChapterRange, Reason
 from studysynth.pipeline.graph import EXTRACT_CONCEPTS, Nodes, Runner
 from studysynth.pipeline.ingest import TextbookIngestor
 from studysynth.pipeline.retrieval import TextbookGate
-from studysynth.store import Catalogue, Places, VectorStore
+from studysynth.store import Catalogue, VectorStore
 
 from .conftest import mock_settings
 from .samples import write_pdf
@@ -88,7 +88,6 @@ def project(tmp_path: Path) -> dict[str, object]:
     settings = mock_settings(tmp_path)
 
     catalogue = Catalogue(settings.paths.catalogue)
-    places = Places(settings)
     vectors = VectorStore(settings)
     llm = llm_backends.build(settings)
     embed = embedding_backends.build(settings)
@@ -117,7 +116,7 @@ def project(tmp_path: Path) -> dict[str, object]:
     )
 
     gate = TextbookGate(settings, llm, embed, vectors, catalogue)
-    nodes = Nodes(settings, llm, gate, catalogue, places)
+    nodes = Nodes(settings, llm, gate, catalogue)
     return {
         "settings": settings,
         "catalogue": catalogue,
@@ -253,6 +252,15 @@ def test_a_run_resumes_from_the_node_that_failed(project, monkeypatch):
     assert calls["n"] == 2
 
 
+def rendered(reader, folder):
+    """Every page image the notes in this folder render to."""
+    return [
+        image
+        for pdf in sorted(folder.glob("*.pdf"))
+        for image in reader.rasterise(pdf, folder / "pages")
+    ]
+
+
 @pytest.fixture
 def shelf(tmp_path):
     settings = mock_settings(tmp_path)
@@ -288,13 +296,13 @@ def test_the_same_file_name_replaces_its_pdf_and_pages(shelf, tmp_path):
     assert shelf.add_notes("cs3340", "week-3", "a.pdf", long_notes.read_bytes()) == 12
 
     folder = shelf.places.notes_dir("cs3340", "week-3")
-    reader = NoteIngestor(shelf.settings, shelf.llm, shelf.places, shelf.catalogue)
-    assert len(reader._images(folder)) == 12
+    reader = NoteIngestor(shelf.settings, shelf.llm, shelf.catalogue)
+    assert len(rendered(reader, folder)) == 12
 
     short_notes = write_pdf(tmp_path / "b.pdf", [["only page"]])
     assert shelf.add_notes("cs3340", "week-3", "a.pdf", short_notes.read_bytes()) == 1
     assert len(list(folder.glob("*.pdf"))) == 1, "the previous version survived"
-    assert len(reader._images(folder)) == 1, "stale rendered pages survived"
+    assert len(rendered(reader, folder)) == 1, "stale rendered pages survived"
     assert shelf.catalogue.lecture("cs3340", "week-3").note_count == 1
 
     shelf.add_notes("cs3340", "week-3", "b.pdf", short_notes.read_bytes())
@@ -313,7 +321,7 @@ def test_a_notes_pdf_of_any_length_is_accepted(shelf, tmp_path, pages):
     assert shelf.add_notes("cs3340", lecture_id, "notes.pdf", pdf.read_bytes()) == pages
 
     folder = shelf.places.notes_dir("cs3340", lecture_id)
-    images = NoteIngestor(shelf.settings, shelf.llm, shelf.places, shelf.catalogue)._images(folder)
+    images = rendered(NoteIngestor(shelf.settings, shelf.llm, shelf.catalogue), folder)
     assert len(images) == pages, "a page was dropped"
     assert all(p.suffix == ".png" and p.stat().st_size > 0 for p in images)
 
@@ -339,11 +347,11 @@ def test_rendered_pages_are_reused_on_a_second_read(shelf, tmp_path):
     pdf = write_pdf(tmp_path / "notes.pdf", [["one"], ["two"], ["three"]])
     shelf.add_notes("cs3340", "week-3", "notes.pdf", pdf.read_bytes())
     folder = shelf.places.notes_dir("cs3340", "week-3")
-    reader = NoteIngestor(shelf.settings, shelf.llm, shelf.places, shelf.catalogue)
+    reader = NoteIngestor(shelf.settings, shelf.llm, shelf.catalogue)
 
-    first = reader._images(folder)
+    first = rendered(reader, folder)
     stamps = [p.stat().st_mtime_ns for p in first]
-    second = reader._images(folder)
+    second = rendered(reader, folder)
     assert [p.stat().st_mtime_ns for p in second] == stamps, "pages were re-rendered"
 
 

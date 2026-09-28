@@ -95,7 +95,6 @@ def test_relevance_drops_a_topical_near_miss(settings, embeddings):
         [make_candidate("a"), make_candidate("b")], [make_gap()]
     )
     assert [c.id for c in kept] == ["a"]
-    assert kept[0].relevance == pytest.approx(0.91)
     assert rejected[0].reason is Reason.BELOW_RELEVANCE
     assert rejected[0].score == pytest.approx(0.40)
 
@@ -117,7 +116,7 @@ def test_necessity_rejects_relevant_prose_the_student_already_has(settings, embe
         }
     )
     kept, rejected = gate(settings, llm, embeddings).grade_necessity(
-        [make_candidate("a", relevance=0.95)], [make_gap()], [make_draft()]
+        [make_candidate("a")], [make_gap()], [make_draft()]
     )
     assert kept == []
     assert rejected[0].reason is Reason.NOT_NECESSARY

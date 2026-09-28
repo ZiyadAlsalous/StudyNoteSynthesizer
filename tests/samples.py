@@ -14,7 +14,7 @@ def _escape(text: str) -> str:
 
 
 def write_pdf(path: Path, pages: list[list[str]]) -> Path:
-    """One page per list of lines. Text is extractable by pypdf."""
+    """One page per list of lines. Text is extractable by PyMuPDF."""
     objects: list[bytes] = []
     page_ids = [4 + index * 2 for index in range(len(pages))]
 
